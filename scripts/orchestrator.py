@@ -201,8 +201,12 @@ def extract_gate_commands(text: str) -> list[tuple[dict[str, str], list[str]]]:
             while argv and re.match(r"^[A-Z_][A-Z0-9_]*=", argv[0]):
                 k, v = argv.pop(0).split("=", 1)
                 env[k] = v
-            ok = bool(argv) and (argv[0] in GATE_TOOLS or argv[:3] == ["python3", "-m", "py_compile"])
-            if not ok:
+            # Solo comandos completos: una herramienta citada a secas (`ruff`) no es un criterio.
+            is_tool = len(argv) > 1 and argv[0] in GATE_TOOLS
+            if argv[:1] == ["ruff"] and argv[1:2] not in (["check"], ["format"]):
+                is_tool = False
+            is_compile = len(argv) > 3 and argv[:3] == ["python3", "-m", "py_compile"]
+            if not (is_tool or is_compile):
                 continue
             expanded: list[str] = []
             for a in argv:
@@ -531,6 +535,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise OrchestratorError(f"{task.path.name} no define 'Archivos permitidos'; el scope guard no puede operar.")
         if args.dry_run:
             print(f"[dry-run] Ejecutaría {task.task_id} en {task.branch}")
+            for env, argv in task.gate:
+                print("  gate:", " ".join([*(f"{k}={v}" for k, v in env.items()), *argv]))
             return EXIT_OK
 
         coder, reviewer = build_agents(args)
