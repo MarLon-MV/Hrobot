@@ -1,0 +1,33 @@
+[project]
+name = "hrobot-dev"
+version = "0.1.0"
+description = "Herramientas de desarrollo del robot AMR hospitalario"
+requires-python = ">=3.11"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8,<9",
+    "pytest-cov>=5",
+    "ruff>=0.5",
+    "mypy>=1.10",
+    "PyYAML>=6",
+    "types-PyYAML>=6",
+]
+
+[tool.ruff]
+line-length = 100
+extend-exclude = ["tasks", "scripts", ".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S", "SIM", "C4"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+
+[tool.mypy]
+strict = true
+mypy_path = "src/hrobot_core"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src/hrobot_core"]
