@@ -279,7 +279,8 @@ def cli_agent(cmd_template: Sequence[str], timeout: int) -> AgentFn:
         except subprocess.TimeoutExpired as exc:
             raise OrchestratorError(f"Agente excedió el timeout de {timeout}s") from exc
         if proc.returncode != 0:
-            raise OrchestratorError(f"Agente falló ({proc.returncode}): {proc.stderr.strip()[:500]}")
+            detail = "\n".join(s for s in (proc.stderr.strip(), proc.stdout.strip()) if s)
+            raise OrchestratorError(f"Agente falló ({proc.returncode}):\n{detail[-1500:]}")
         return proc.stdout
     return run
 
