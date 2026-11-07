@@ -46,6 +46,7 @@ Crear `src/hrobot_core/hrobot_core/adapters/supervisor_node.py` con la clase `Su
   - Parámetros sobreescritos (`max_linear = 0.1`) ⇒ se respetan en la salida
   - `main` publica ceros en el `finally` al terminar (simulando excepción durante `spin`)
   - El `StopReason` se loguea solo al cambiar, no en cada tick
+  - Tipos de mensaje (los mensajes reales de `rclpy` rechazan tipos incorrectos con `AssertionError`, los fakes no): todo `Twist` publicado tiene sus seis campos (`linear.x/y/z`, `angular.x/y/z`) de tipo `float` exacto (también los ceros: `0.0`, nunca `0`)
   - Exactamente **un** publisher a `/cmd_vel` y las QoS de las tres suscripciones son las especificadas (incluida `TRANSIENT_LOCAL` para el estado de misión)
 - [ ] Test estático (`ast`) de `supervisor_node.py`: sin `time.sleep`, sin `print(`, exactamente un `create_publisher` hacia `CMD_VEL_TOPIC`
 - [ ] `grep -q "supervisor_node" src/hrobot_core/setup.py` termina con código 0
