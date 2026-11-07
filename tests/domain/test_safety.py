@@ -82,12 +82,16 @@ def test_all_posinf_is_one() -> None:
 
 
 def test_nan_and_posinf_is_one() -> None:
-    assert speed_factor(make_scan([NAN, INF, NAN]), CFG) == 1.0
+    # TASK-010: con [NAN, INF, NAN] la fracción válida es 1/3 < 0.70 y se
+    # degrada; se usan 3 rayos +inf y 1 NaN (0.75) para el caso sin degradación.
+    assert speed_factor(make_scan([NAN, INF, INF, INF]), CFG) == 1.0
 
 
 def test_nan_and_obstacle_uses_obstacle() -> None:
+    # TASK-010: [NAN, mid, NAN] (fracción 1/3) ahora se degrada; se usa 1 NaN
+    # de 4 rayos (0.75) para comprobar que el obstáculo manda sin degradación.
     mid = (CFG.stop_distance + CFG.slow_distance) / 2
-    assert speed_factor(make_scan([NAN, mid, NAN]), CFG) == pytest.approx(0.5)
+    assert speed_factor(make_scan([NAN, mid, mid, mid]), CFG) == pytest.approx(0.5)
 
 
 def test_neginf_only_is_zero() -> None:
@@ -96,12 +100,16 @@ def test_neginf_only_is_zero() -> None:
 
 def test_finite_below_range_min_ignored_as_invalid() -> None:
     assert speed_factor(make_scan([0.01, 0.01, 0.01]), CFG) == 0.0
-    assert speed_factor(make_scan([0.01, INF, 0.01]), CFG) == 1.0
+    # TASK-010: 1 de 3 rayos válidos (< 0.70) ⇒ degradado a 0.30 (antes 1.0).
+    assert speed_factor(make_scan([0.01, INF, 0.01]), CFG) == pytest.approx(0.30)
+    assert speed_factor(make_scan([0.01, INF, INF, INF]), CFG) == 1.0
 
 
 def test_finite_above_range_max_ignored() -> None:
     assert speed_factor(make_scan([20.0, 20.0, 20.0]), CFG) == 0.0
-    assert speed_factor(make_scan([20.0, 0.675, 20.0]), CFG) == pytest.approx(0.5)
+    # TASK-010: 1 de 3 válidos (< 0.70) ⇒ min(0.5, 0.30); con 3 de 4 no degrada.
+    assert speed_factor(make_scan([20.0, 0.675, 20.0]), CFG) == pytest.approx(0.30)
+    assert speed_factor(make_scan([20.0, 0.675, 0.675, 0.675]), CFG) == pytest.approx(0.5)
 
 
 def test_range_bounds_inclusive() -> None:
@@ -173,8 +181,74 @@ def test_negative_range_min_negative_distance_is_stop() -> None:
         {"stale_timeout": 0.0},
         {"stale_timeout": NAN},
         {"slow_distance": INF},
+        {"min_valid_ratio": 0.0},
+        {"min_valid_ratio": -0.1},
+        {"min_valid_ratio": 1.1},
+        {"min_valid_ratio": NAN},
+        {"min_valid_ratio": INF},
+        {"degraded_factor": 0.0},
+        {"degraded_factor": 1.0},
+        {"degraded_factor": 1.5},
+        {"degraded_factor": NAN},
     ],
 )
 def test_invalid_config_raises(kwargs: dict[str, float]) -> None:
     with pytest.raises(ValueError):
         SafetyConfig(**kwargs)
+
+
+def test_boundary_config_values_are_valid() -> None:
+    cfg = SafetyConfig(min_valid_ratio=1.0, degraded_factor=0.99)
+    assert cfg.min_valid_ratio == 1.0
+    assert cfg.degraded_factor == 0.99
+
+
+def hundred(prefix: list[float], rest: list[float]) -> ScanData:
+    """100 rayos dentro del cono: angle_min=-0.5, inc=0.01."""
+    ranges = prefix + rest
+    assert len(ranges) == 100
+    return make_scan(ranges, angle_min=-0.5, inc=0.01)
+
+
+@pytest.mark.parametrize(
+    ("n_nan", "expected"),
+    [(29, 1.0), (30, 1.0), (31, 0.30), (99, 0.30), (100, 0.0)],
+)
+def test_valid_ratio_thresholds(n_nan: int, expected: float) -> None:
+    scan = hundred([NAN] * n_nan, [INF] * (100 - n_nan))
+    assert speed_factor(scan, CFG) == pytest.approx(expected)
+
+
+def test_zero_distances_below_range_min_degrade() -> None:
+    scan = hundred([0.0] * 40, [INF] * 60)
+    assert speed_factor(scan, CFG) == pytest.approx(0.30)
+
+
+def test_degraded_with_close_obstacle_takes_minimum() -> None:
+    # 0.5 m exige (0.5-0.35)/0.65 ≈ 0.2308 < 0.30: manda el obstáculo.
+    scan = hundred([NAN] * 40, [0.5] + [INF] * 59)
+    expected = (0.5 - CFG.stop_distance) / (CFG.slow_distance - CFG.stop_distance)
+    assert speed_factor(scan, CFG) == pytest.approx(expected)
+
+
+def test_degraded_with_far_obstacle_uses_cap() -> None:
+    # 0.9 m exige ≈ 0.846 > 0.30: manda el tope degradado.
+    scan = hundred([NAN] * 40, [0.9] + [INF] * 59)
+    assert speed_factor(scan, CFG) == pytest.approx(0.30)
+
+
+def test_degraded_with_obstacle_in_stop_zone_is_zero() -> None:
+    scan = hundred([NAN] * 40, [0.35] + [INF] * 59)
+    assert speed_factor(scan, CFG) == 0.0
+
+
+def test_few_nan_with_obstacle_is_not_degraded() -> None:
+    scan = hundred([NAN] * 10, [0.675] + [INF] * 89)
+    assert speed_factor(scan, CFG) == pytest.approx(0.5)
+
+
+def test_realistic_450_ray_scan_with_nan_band_is_degraded() -> None:
+    inc = 2 * math.pi / 450
+    ranges = [NAN if abs(-math.pi + i * inc) <= 0.2 else INF for i in range(450)]
+    scan = make_scan(ranges, angle_min=-math.pi, inc=inc)
+    assert speed_factor(scan, CFG) == pytest.approx(0.30)

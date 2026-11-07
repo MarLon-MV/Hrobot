@@ -25,16 +25,27 @@ class SafetyConfig:
         slow_distance: Distancia (m) a partir de la cual el factor es 1.
         front_half_angle: Semiángulo (rad) del cono frontal evaluado.
         stale_timeout: Edad máxima (s) admitida del scan.
+        min_valid_ratio: Fracción mínima de rayos válidos (obstáculo o libre)
+            sobre el total de rayos del cono, en ``(0, 1]``. El límite es
+            inclusivo: justo en el umbral **no** se degrada. Valor inicial a
+            calibrar con scans reales.
+        degraded_factor: Tope de velocidad en ``(0, 1)`` cuando la fracción
+            válida es positiva pero menor que ``min_valid_ratio``. Valor
+            inicial a calibrar con scans reales.
 
     Raises:
-        ValueError: Si algún valor no es finito o <= 0, o si
-            ``stop_distance >= slow_distance``.
+        ValueError: Si algún valor de distancia/ángulo/tiempo no es finito o
+            <= 0, si ``stop_distance >= slow_distance``, si
+            ``min_valid_ratio`` no es finito en ``(0, 1]`` o si
+            ``degraded_factor`` no es finito en ``(0, 1)``.
     """
 
     stop_distance: float = 0.35
     slow_distance: float = 1.00
     front_half_angle: float = 0.6
     stale_timeout: float = 0.5
+    min_valid_ratio: float = 0.70
+    degraded_factor: float = 0.30
 
     def __post_init__(self) -> None:
         values = {
@@ -48,6 +59,12 @@ class SafetyConfig:
                 raise ValueError(f"{name} must be finite and > 0, got {value!r}")
         if self.stop_distance >= self.slow_distance:
             raise ValueError("stop_distance must be < slow_distance")
+        ratio = self.min_valid_ratio
+        if not math.isfinite(ratio) or not 0.0 < ratio <= 1.0:
+            raise ValueError(f"min_valid_ratio must be in (0, 1], got {ratio!r}")
+        degraded = self.degraded_factor
+        if not math.isfinite(degraded) or not 0.0 < degraded < 1.0:
+            raise ValueError(f"degraded_factor must be in (0, 1), got {degraded!r}")
 
 
 @dataclass(frozen=True)
@@ -98,6 +115,12 @@ def speed_factor(scan: ScanData, cfg: SafetyConfig) -> float:
     Fallo seguro (0.0): scan caducado o con edad/geometría no finita, y cono
     frontal sin ningún rayo válido (scan vacío incluido). Solo rayos libres ⇒ 1.0.
 
+    Degradación por datos dudosos: la fracción válida es
+    ``rayos_válidos / rayos_totales_en_el_cono`` (los inválidos cuentan en el
+    total). Si ``fracción >= cfg.min_valid_ratio`` (límite inclusivo) no hay
+    cambios; si ``0 < fracción < cfg.min_valid_ratio`` el resultado es
+    ``min(factor, cfg.degraded_factor)``: solo se reduce la velocidad.
+
     Args:
         scan: Datos del scan.
         cfg: Configuración de seguridad.
@@ -109,6 +132,7 @@ def speed_factor(scan: ScanData, cfg: SafetyConfig) -> float:
         return STOP_FACTOR
     nearest = math.inf
     valid_rays = 0
+    cone_rays = 0
     for index, distance in enumerate(scan.ranges):
         raw_angle = scan.angle_min + index * scan.angle_increment
         if not math.isfinite(raw_angle):
@@ -117,6 +141,7 @@ def speed_factor(scan: ScanData, cfg: SafetyConfig) -> float:
         angle = normalize_angle(raw_angle)
         if abs(angle) > cfg.front_half_angle:
             continue
+        cone_rays += 1
         if distance == math.inf:
             valid_rays += 1
         elif math.isfinite(distance) and scan.range_min <= distance <= scan.range_max:
@@ -124,6 +149,7 @@ def speed_factor(scan: ScanData, cfg: SafetyConfig) -> float:
             nearest = min(nearest, distance)
     if valid_rays == 0:
         return STOP_FACTOR
-    if nearest == math.inf:
-        return FREE_FACTOR
-    return _linear_factor(nearest, cfg)
+    factor = FREE_FACTOR if nearest == math.inf else _linear_factor(nearest, cfg)
+    if valid_rays / cone_rays < cfg.min_valid_ratio:
+        return min(factor, cfg.degraded_factor)
+    return factor
