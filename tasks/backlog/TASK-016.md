@@ -1,7 +1,7 @@
 # TASK-016: Nodo ROS 2 del supervisor de seguridad (único publicador de `/cmd_vel`)
 
 - **Rama Git:** `feat/TASK-016`
-- **Depende de:** TASK-012, TASK-015
+- **Depende de:** TASK-012, TASK-015, TASK-017, TASK-018
 - **Prioridad:** P0
 
 ## Contexto y objetivo de negocio
@@ -10,7 +10,7 @@ Envuelve `SafetySupervisor` (TASK-015) en un nodo `rclpy`. Es el **único** nodo
 ## Alcance técnico
 Crear `src/hrobot_core/hrobot_core/adapters/supervisor_node.py` con la clase `SupervisorNode(Node)` y `main(args=None)`.
 
-- **Parámetros** (`declare_parameter` con tipo y defecto; nombres y defectos iguales a `SupervisorConfig` y `SafetyConfig`): `max_linear`, `max_angular`, `cmd_timeout_s`, `mission_timeout_s`, `require_mission_status`, `max_rise_per_s`, `stop_distance`, `slow_distance`, `front_half_angle`, `stale_timeout`, `min_valid_ratio`, `degraded_factor`; más `publish_rate_hz` (defecto 20.0, debe estar en `(0, 100]`). Los parámetros inválidos hacen que el constructor lance `ValueError` (el nodo **falla al arrancar**; nunca se sustituyen silenciosamente por valores por defecto).
+- **Parámetros** (`declare_parameter` con tipo y defecto; nombres y defectos iguales a `SupervisorConfig` y `SafetyConfig`): `max_linear`, `max_angular`, `cmd_timeout_s`, `mission_timeout_s`, `require_mission_status`, `max_rise_per_s`, `stop_distance`, `slow_distance`, `front_half_angle`, `stale_timeout`, `min_valid_ratio`, `degraded_factor`, `max_invalid_run_rad` (rad, defecto `math.radians(8.0)`), `max_step_gap_s` (defecto 0.25; ver TASK-018); más `publish_rate_hz` (defecto 20.0, debe estar en `(0, 100]`). **Restricción cruzada:** `max_step_gap_s >= 2.0 / publish_rate_hz`; si no se cumple, el constructor lanza `ValueError` (un hueco máximo menor que dos periodos haría que el robot nunca se mueva). Los parámetros inválidos hacen que el constructor lance `ValueError` (el nodo **falla al arrancar**; nunca se sustituyen silenciosamente por valores por defecto).
 - **Suscripciones** (constantes de `adapters/names.py`):
   - `NAV_CMD_VEL_TOPIC`, `Twist`, QoS fiable de profundidad 1 ⇒ `supervisor.on_command(VelocityCommand(linear.x, angular.z), now)`.
   - `SCAN_TOPIC`, `LaserScan`, `qos_profile_sensor_data` ⇒ `supervisor.on_scan(list(msg.ranges), msg.angle_min, msg.angle_increment, msg.range_min, msg.range_max, now)`.
@@ -43,6 +43,9 @@ Crear `src/hrobot_core/hrobot_core/adapters/supervisor_node.py` con la clase `Su
   - Estado de misión con nombre desconocido ⇒ trata como sin estado válido y se loguea advertencia
   - Marcha atrás pedida (`linear.x < 0`) ⇒ `linear.x == 0.0` publicado
   - Parámetro inválido (`max_linear = -1.0`, `publish_rate_hz = 0.0` o `500.0`) ⇒ `ValueError` al construir el nodo
+  - Restricción cruzada: `publish_rate_hz = 20.0` con `max_step_gap_s = 0.05` ⇒ `ValueError`; con `0.1` o más ⇒ válido
+  - Pausa del nodo: avanzar el reloj falso 5 s sin ejecutar el timer y luego reanudar con todo libre ⇒ el primer `Twist` publicado tras la pausa es de ceros y la velocidad sube de forma progresiva (no velocidad completa)
+  - `max_invalid_run_rad` y `max_step_gap_s` declarados como parámetros y respetados al sobreescribirlos
   - Parámetros sobreescritos (`max_linear = 0.1`) ⇒ se respetan en la salida
   - `main` publica ceros en el `finally` al terminar (simulando excepción durante `spin`)
   - El `StopReason` se loguea solo al cambiar, no en cada tick
