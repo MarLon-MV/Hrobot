@@ -304,11 +304,11 @@ def discard_out_of_scope_worktree(task: Task) -> list[str]:
 AgentFn = Callable[[str, str], str]  # (system_prompt, user_prompt) -> salida
 
 
-def cli_agent(cmd_template: Sequence[str], timeout: int) -> AgentFn:
+def cli_agent(cmd_template: Sequence[str], timeout: int, env: dict[str, str] | None = None) -> AgentFn:
     def run(system: str, prompt: str) -> str:
         cmd = [*cmd_template, "-p", prompt, "--append-system-prompt", system]
         try:
-            proc = subprocess.run(cmd, cwd=ROOT, text=True, capture_output=True, timeout=timeout)
+            proc = subprocess.run(cmd, cwd=ROOT, text=True, capture_output=True, timeout=timeout, env=env)
         except FileNotFoundError as exc:
             raise OrchestratorError(f"Comando de agente no encontrado: {cmd_template[0]}") from exc
         except subprocess.TimeoutExpired as exc:
@@ -494,7 +494,13 @@ def build_agents(args: argparse.Namespace) -> tuple[AgentFn, AgentFn]:
     cmd = args.agent_cmd.split()
     coder_cmd = [*cmd, "--permission-mode", "acceptEdits", "--allowedTools", CODER_TOOLS]
     reviewer_cmd = [*cmd, "--allowedTools", REVIEWER_TOOLS, "--disallowedTools", REVIEWER_DENIED]
-    return cli_agent(coder_cmd, args.timeout), cli_agent(reviewer_cmd, args.timeout)
+    env = dict(os.environ)
+    if args.no_api_key:
+        env.pop("ANTHROPIC_API_KEY", None)
+    elif env.get("ANTHROPIC_API_KEY"):
+        log.warning("ANTHROPIC_API_KEY está definida y tiene prioridad sobre tu sesión de claude.ai "
+                    "(si usas suscripción: `unset ANTHROPIC_API_KEY` o pasa --no-api-key).")
+    return cli_agent(coder_cmd, args.timeout, env), cli_agent(reviewer_cmd, args.timeout, env)
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -506,6 +512,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     p.add_argument("--agent-cmd", default=os.environ.get("AGENT_CMD", "claude"), help="Binario del agente (default: claude)")
     p.add_argument("--timeout", type=int, default=1800, help="Timeout por llamada de agente en segundos")
     p.add_argument("--stub-approve-after", type=int, default=2, help="[stub] aprobar en la iteración N (0 = nunca)")
+    p.add_argument("--no-api-key", action="store_true",
+                   help="Ignorar ANTHROPIC_API_KEY al llamar a claude (usar la sesión de claude.ai)")
     p.add_argument("--no-gate", action="store_true", help="No ejecutar el gate del DoD antes del Reviewer")
     p.add_argument("--dry-run", action="store_true", help="Solo muestra qué tarea se ejecutaría")
     p.add_argument("-v", "--verbose", action="store_true")
