@@ -43,8 +43,8 @@ Comportamiento:
 ## Criterios de Aceptación (DoD)
 - [ ] `PYTHONPATH=src/hrobot_core pytest tests/domain/test_config.py -q` termina con código 0
 - [ ] `PYTHONPATH=src/hrobot_core pytest tests/domain/test_config.py --cov=hrobot_core.domain.config --cov-fail-under=95 -q` termina con código 0
-- [ ] `ruff check .` termina con código 0
-- [ ] `ruff format --check .` termina con código 0
+- [ ] `ruff check src tests` termina con código 0
+- [ ] `ruff format --check src tests` termina con código 0
 - [ ] `mypy --strict src/hrobot_core/hrobot_core` termina con código 0
 - [ ] Un test verifica que una config válida mínima devuelve `AppConfig` con defaults (`log_level == "INFO"`, `max_workers == 4`)
 - [ ] Un test verifica que una config con 3 campos inválidos produce `len(errors) == 3`

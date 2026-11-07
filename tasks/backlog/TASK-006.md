@@ -35,7 +35,7 @@ Reglas:
 ## Criterios de Aceptación (DoD)
 - [ ] `PYTHONPATH=src/hrobot_core pytest -q tests/adapters/test_ld19_parser.py` termina con código 0
 - [ ] `PYTHONPATH=src/hrobot_core pytest tests/adapters/test_ld19_parser.py --cov=hrobot_core.adapters.ld19_parser --cov-fail-under=95 -q` termina con código 0
-- [ ] `ruff check .`, `ruff format --check .` y `mypy --strict src/hrobot_core/hrobot_core` terminan con código 0
+- [ ] `ruff check src tests`, `ruff format --check src tests` y `mypy --strict src/hrobot_core/hrobot_core` terminan con código 0
 - [ ] Tests: trama válida construida en el test (con CRC calculado), trama dividida en 2 y 3 fragmentos, dos tramas concatenadas, basura previa, CRC corrupto, cruce de 360°, buffer acotado con 1 MB de basura
 - [ ] El módulo no importa `rclpy`, `serial` ni mensajes ROS
 

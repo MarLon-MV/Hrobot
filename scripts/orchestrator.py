@@ -256,11 +256,42 @@ def pick_next_task(explicit: str | None) -> Task:
     raise OrchestratorError("No hay tareas elegibles (dependencias pendientes o ramas esperando merge).")
 
 
+def in_scope(task: Task, path: str) -> bool:
+    patterns = task.allowed + [f"tasks/**/{task.task_id}*", "tasks/**/.gitkeep"]
+    return any(fnmatch.fnmatch(path, pat) for pat in patterns)
+
+
 def out_of_scope_files(task: Task, base: str) -> list[str]:
     """Archivos cambiados respecto a base que no están en el alcance permitido."""
     changed = git("diff", "--name-only", f"{base}...HEAD").stdout.split()
-    allowed = task.allowed + [f"tasks/**/{task.task_id}*", "tasks/**/.gitkeep"]
-    return [f for f in changed if not any(fnmatch.fnmatch(f, pat) for pat in allowed)]
+    return [f for f in changed if not in_scope(task, f)]
+
+
+def discard_out_of_scope_worktree(task: Task) -> list[str]:
+    """Descarta cambios SIN commitear fuera del alcance (p. ej. un formateador global).
+
+    Evita que la red de seguridad los commitee. Los ya commiteados por el propio
+    agente los detecta después el scope guard.
+    """
+    raw = git("status", "--porcelain", "-z", "-uall").stdout.split("\0")
+    discarded: list[str] = []
+    i = 0
+    while i < len(raw):
+        entry = raw[i]
+        i += 1
+        if not entry:
+            continue
+        xy, path = entry[:2], entry[3:]
+        if xy[0] in "RC":  # renombrado/copiado: la siguiente entrada es la ruta original
+            i += 1
+        if in_scope(task, path):
+            continue
+        if xy == "??":
+            git("clean", "-fd", "--", path, check=False)
+        else:
+            git("checkout", "HEAD", "--", path, check=False)
+        discarded.append(path)
+    return discarded
 
 
 # --------------------------------------------------------------------------- #
@@ -402,11 +433,17 @@ def run_task(task: Task, base: str, coder: AgentFn, reviewer: AgentFn, max_iter:
         for i in range(1, max_iter + 1):
             log.info("=== %s · iteración %d/%d · Coder ===", task.task_id, i, max_iter)
             coder(coder_sys, coder_prompt(task, in_progress_path, feedback, i))
+            discarded = discard_out_of_scope_worktree(task)
+            if discarded:
+                log.warning("Descartados cambios fuera de alcance sin commitear: %s", discarded)
             commit_all(f"chore({task.task_id}): coder changes (iteration {i})")  # red de seguridad
+            note = (f"Se descartaron automáticamente cambios tuyos fuera de alcance: {', '.join(discarded)}. "
+                    "No ejecutes formateadores/linters con --fix sobre todo el repo; solo sobre tus archivos.\n\n"
+                    if discarded else "")
 
             stray = out_of_scope_files(task, base)
             if stray:
-                feedback = ("Modificaste archivos fuera del alcance permitido: "
+                feedback = (note + "Commiteaste archivos fuera del alcance permitido: "
                             + ", ".join(stray) + ". Revierte esos cambios.")
                 review = f"Veredicto: [RECHAZADO]\n(scope guard) {feedback}"
                 log.warning("Scope guard: %s", stray)
@@ -415,7 +452,7 @@ def run_task(task: Task, base: str, coder: AgentFn, reviewer: AgentFn, max_iter:
             if gate_enabled:
                 failure = run_gate(task)
                 if failure:
-                    feedback = f"El gate del DoD falló. Corrige:\n{failure}"
+                    feedback = f"{note}El gate del DoD falló. Corrige:\n{failure}"
                     review = f"Veredicto: [RECHAZADO]\n(gate) {failure}"
                     log.warning("Gate del DoD falló; se omite al Reviewer en esta iteración.")
                     continue
@@ -433,7 +470,7 @@ def run_task(task: Task, base: str, coder: AgentFn, reviewer: AgentFn, max_iter:
                 print(f"   Sugerido: git checkout {base} && git merge --squash {task.branch}")
                 git("checkout", base)
                 return EXIT_OK
-            feedback = review
+            feedback = note + review
             log.info("Rechazado. Feedback enviado al Coder.")
 
         marker = escalate(task, review, max_iter)

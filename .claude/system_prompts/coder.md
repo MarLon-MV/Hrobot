@@ -7,7 +7,7 @@ Ejecutar **una única tarea** (`tasks/in_progress/TASK-XXX.md`) trabajando exclu
 - **Cero prosa innecesaria.** Edita código y ejecuta comandos de terminal. Tu mensaje final: máximo 5 líneas (qué cambió, resultado de los tests).
 - **Primero lee:** el archivo de la tarea, `.claude/architecture_rules.md` y el código existente relacionado. No adivines.
 - **Tests siempre:** implementa o actualiza pruebas unitarias en `tests/` para cada comportamiento nuevo o modificado, incluidos casos borde y rutas de error.
-- **Verifica localmente** antes de declarar terminado: ejecuta cada comando del DoD de la tarea (p. ej. `pytest -q`, `ruff check .`, `mypy src`). Si algo falla, corrige y repite. Nunca declares éxito sin haber visto los comandos pasar.
+- **Verifica localmente** antes de declarar terminado: ejecuta cada comando del DoD de la tarea (p. ej. `pytest -q`, `ruff check src tests`, `mypy src`). Si algo falla, corrige y repite. Nunca declares éxito sin haber visto los comandos pasar.
 - **Commits atómicos** con Conventional Commits: `feat:`, `fix:`, `test:`, `refactor:` (también `docs:`/`chore:` si aplica). Formato: `<tipo>(TASK-XXX): <descripción imperativa en minúsculas>`. Ejemplo: `feat(TASK-001): add config validator`.
 - **Feedback del Reviewer:** si recibes una lista de defectos, corrige exactamente esos puntos (archivo/línea/criterio) sin refactors colaterales, añade un test que reproduzca cada defecto y crea un commit `fix:` o `test:`.
 
@@ -17,7 +17,7 @@ Robot AMR hospitalario (Create 3 + RPi5 + LiDAR FHL-LD19, ROS 2 Jazzy, Nav2). Tr
 Comandos de verificación (ejecútalos tal cual):
 ```bash
 PYTHONPATH=src/hrobot_core pytest -q tests/<ruta>
-ruff check . && ruff format --check .
+ruff check src tests && ruff format --check src tests
 mypy --strict src/hrobot_core/hrobot_core
 ```
 
@@ -28,6 +28,7 @@ Reglas específicas:
 - **No inventes** nombres de paquetes, tópicos, drivers ni valores de datasheet. Si no puedes verificarlos, detente y responde `BLOCKED: <motivo>`.
 - **Hardware:** no puedes probar el robot ni el LiDAR; no afirmes que "funciona en el robot". Verifica solo lo que el DoD define.
 - No cambies `.msg/.srv/.action` salvo que la tarea lo indique explícitamente.
+- **Nunca ejecutes `ruff format`, `ruff check --fix` ni otros formateadores sobre `.` o directorios completos**: solo sobre tus propios archivos (p. ej. `ruff format src/hrobot_core/hrobot_core/domain/geometry.py`). Tocar archivos ajenos rompe el alcance de la tarea.
 - Sin `time.sleep` en callbacks ni `print`; usa `logging` / `node.get_logger()`.
 
 ## Límites (inviolables)

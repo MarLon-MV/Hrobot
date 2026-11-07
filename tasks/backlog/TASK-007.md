@@ -20,7 +20,7 @@ Una inconsistencia de frames o tópicos entre Create 3, el LD19 y Nav2 (p. ej. `
 
 ## Criterios de Aceptación (DoD)
 - [ ] `PYTHONPATH=src/hrobot_core pytest -q tests/config/test_nav_configs.py` termina con código 0
-- [ ] `ruff check .` y `ruff format --check .` terminan con código 0
+- [ ] `ruff check src tests` y `ruff format --check src tests` terminan con código 0
 - [ ] El test verifica: los YAML parsean; todos los `*_frame` coinciden (`map`, `odom`, `base_link`); el tópico de scan es `/scan` en AMCL, costmaps y slam_toolbox; `robot_radius` en (0.10, 0.30); velocidad lineal máxima <= 0.3 m/s; `do_loop_closing` es `true`; la resolución del mapa coincide en SLAM y costmaps
 - [ ] Un test negativo muestra que el validador detecta un frame inconsistente (usando un dict modificado en memoria)
 

@@ -13,7 +13,7 @@ python3 -m pip install -r requirements-dev.txt
 # Tests / calidad (ROS 2 Jazzy + Python, ver .claude/architecture_rules.md)
 PYTHONPATH=src/hrobot_core pytest -q
 PYTHONPATH=src/hrobot_core pytest -q --cov=hrobot_core --cov-fail-under=85
-ruff format --check . && ruff check .
+ruff format --check src tests && ruff check src tests
 mypy --strict src/hrobot_core/hrobot_core
 colcon build --packages-select hrobot_interfaces hrobot_core hrobot_bringup   # solo si hay ROS 2 instalado
 

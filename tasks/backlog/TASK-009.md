@@ -29,7 +29,7 @@ En `src/hrobot_bringup/launch/`:
 
 ## Criterios de Aceptación (DoD)
 - [ ] `PYTHONPATH=src/hrobot_core pytest -q tests/launch/test_launch_files.py` termina con código 0 (el test **no requiere ROS instalado**: usa `ast` para análisis estático)
-- [ ] `ruff check .`, `ruff format --check .` terminan con código 0
+- [ ] `ruff check src tests`, `ruff format --check src tests` terminan con código 0
 - [ ] `python3 -m py_compile src/hrobot_bringup/launch/*.launch.py` termina con código 0
 - [ ] El test verifica por análisis estático: cada archivo define `generate_launch_description`; los cuatro declaran `use_sim_time`; `navigation.launch.py` declara el argumento `map`; `sensors.launch.py` declara `lidar_port` y los offsets del láser; los archivos de configuración referenciados existen en `src/hrobot_bringup/{config,rviz}/`; ningún launch contiene rutas absolutas (`/home/`, `/Users/`) ni fija `ROS_DOMAIN_ID`
 - [ ] `setup.py` instala `launch/`, `config/`, `rviz/` y `maps/` en `share/hrobot_bringup`

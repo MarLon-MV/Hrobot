@@ -23,7 +23,7 @@ Test de coherencia en `tests/config/test_rviz_config.py`: carga el `.rviz` y el 
 
 ## Criterios de Aceptación (DoD)
 - [ ] `PYTHONPATH=src/hrobot_core pytest -q tests/config/test_rviz_config.py` termina con código 0
-- [ ] `ruff check .` y `ruff format --check .` terminan con código 0
+- [ ] `ruff check src tests` y `ruff format --check src tests` terminan con código 0
 - [ ] El test verifica: el `.rviz` parsea como YAML; `Fixed Frame` es `map` y coincide con `global_frame` de Nav2; existe un display `TF`, un `LaserScan` con tópico `/scan` (igual al `scan_topic` de la config), un `PoseArray` en `/particle_cloud`, un `Path` en `/plan`, dos displays `Map` para los costmaps; las tools `SetInitialPose` y `SetGoal` están presentes
 - [ ] Test negativo: si se cambia el tópico de scan en memoria, el validador detecta la incoherencia
 

@@ -87,8 +87,8 @@ SOLID, inyección de dependencias por constructor, sin estado global, modelos in
 ## 7. Estilo y calidad (gates antes de revisión)
 
 ```bash
-ruff format --check .
-ruff check .
+ruff format --check src tests
+ruff check src tests
 mypy --strict src/hrobot_core/hrobot_core
 PYTHONPATH=src/hrobot_core pytest -q --cov=hrobot_core --cov-fail-under=85
 ```

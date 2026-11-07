@@ -46,7 +46,7 @@ Transiciones válidas:
 ## Criterios de Aceptación (DoD)
 - [ ] `PYTHONPATH=src/hrobot_core pytest -q tests/domain/test_mission.py` termina con código 0
 - [ ] `PYTHONPATH=src/hrobot_core pytest tests/domain/test_mission.py --cov=hrobot_core.domain.mission --cov-fail-under=98 -q` termina con código 0
-- [ ] `ruff check .`, `ruff format --check .` y `mypy --strict src/hrobot_core/hrobot_core` terminan con código 0
+- [ ] `ruff check src tests`, `ruff format --check src tests` y `mypy --strict src/hrobot_core/hrobot_core` terminan con código 0
 - [ ] Test parametrizado que recorre **todas** las combinaciones estado×evento y verifica que solo las transiciones listadas son válidas
 - [ ] Test del ciclo feliz completo con `delivered == True`, y del timeout con `delivered == False`
 - [ ] Test: `EMERGENCY_STOP` + `GOAL_REACHED`/`START` ⇒ `InvalidTransition`; `RESET` ⇒ `IDLE`

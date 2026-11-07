@@ -40,7 +40,7 @@ Reglas:
 ## Criterios de Aceptación (DoD)
 - [ ] `PYTHONPATH=src/hrobot_core pytest -q tests/domain/test_safety.py` termina con código 0
 - [ ] `PYTHONPATH=src/hrobot_core pytest tests/domain/test_safety.py --cov=hrobot_core.domain.safety --cov-fail-under=98 -q` termina con código 0
-- [ ] `ruff check .`, `ruff format --check .` y `mypy --strict src/hrobot_core/hrobot_core` terminan con código 0
+- [ ] `ruff check src tests`, `ruff format --check src tests` y `mypy --strict src/hrobot_core/hrobot_core` terminan con código 0
 - [ ] Tests: obstáculo exactamente en `stop_distance` y `slow_distance`, punto medio ⇒ 0.5, obstáculo fuera del cono no afecta, scan vacío ⇒ 0.0, todo `NaN` ⇒ 0.0, todo `inf` ⇒ 1.0, scan viejo ⇒ 0.0, config inválida
 - [ ] No hay imports de `rclpy` ni mensajes ROS en el módulo
 

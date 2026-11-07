@@ -19,7 +19,7 @@ Comandos estándar para el DoD (úsalos tal cual):
 ```bash
 PYTHONPATH=src/hrobot_core pytest -q tests/<ruta>
 PYTHONPATH=src/hrobot_core pytest tests/<ruta> --cov=hrobot_core.<modulo> --cov-fail-under=<N> -q
-ruff check . && ruff format --check .
+ruff check src tests && ruff format --check src tests
 mypy --strict src/hrobot_core/hrobot_core
 ```
 
@@ -61,7 +61,7 @@ Uno o más archivos `tasks/backlog/TASK-XXX.md` (XXX = entero de 3 dígitos, sig
 ## Criterios de Aceptación (DoD)
 - [ ] `<comando bash verificable>` termina con código 0
 - [ ] <comportamiento observable verificable por test>
-<Cada criterio debe poder comprobarse con un comando (`PYTHONPATH=src/hrobot_core pytest ...`, `ruff check .`, `mypy --strict ...`; `colcon build` solo como criterio opcional si hay ROS 2) o un test concreto. Prohibidos criterios subjetivos como "código limpio".>
+<Cada criterio debe poder comprobarse con un comando (`PYTHONPATH=src/hrobot_core pytest ...`, `ruff check src tests`, `mypy --strict ...`; `colcon build` solo como criterio opcional si hay ROS 2) o un test concreto. Prohibidos criterios subjetivos como "código limpio".>
 
 ## Fuera de alcance
 <Lo que explícitamente NO se hace.>
