@@ -12,6 +12,7 @@ En `src/hrobot_bringup/launch/`:
 - `sensors.launch.py`: driver del Youyeetoo FHL-LD19 (paquete externo; ver nota), con `lidar_port` (default `/dev/ttyUSB0`), `baudrate=230400`, `frame_id=laser`, topic `/scan` y `static_transform_publisher` `base_link → laser` con offsets como argumentos (`laser_x`, `laser_y`, `laser_z`, `laser_yaw`).
 - `mapping.launch.py`: incluye `sensors.launch.py` y `slam_toolbox` (`online_async`) con `slam_toolbox_params.yaml`.
 - `navigation.launch.py`: incluye `sensors.launch.py`, `nav2_bringup` (`localization` + `navigation`) con `nav2_params.yaml` y argumento `map` (ruta al `.yaml` del mapa, obligatorio).
+- **Salida de velocidad de Nav2:** según `architecture_rules.md`, solo **un** nodo final publica `/cmd_vel` (el supervisor de seguridad, tarea futura). Por eso `navigation.launch.py` expone el argumento `nav_cmd_vel_topic` (default `/cmd_vel_nav`) y remapea a él la salida de Nav2 (`cmd_vel` del `controller_server`/`velocity_smoother`, según corresponda en Jazzy; **verificar los nombres reales**, no inventarlos). Mientras no exista el supervisor, pasar `nav_cmd_vel_topic:=/cmd_vel` solo con el robot en pruebas controladas.
 - `rviz.launch.py`: lanza `rviz2` con `rviz/hrobot_nav.rviz`; solo debe usarse en un equipo con pantalla.
 - Todos aceptan `use_sim_time` (default `false`). Las rutas a YAML/rviz se resuelven con `get_package_share_directory('hrobot_bringup')`, nunca rutas absolutas.
 - `ROS_DOMAIN_ID` y RMW **no** se fijan en los launch (se configuran en el entorno).
