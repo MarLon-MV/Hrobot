@@ -27,10 +27,13 @@ VALID: dict[tuple[S, E], S] = {
     (S.AWAITING_CONFIRMATION, E.CONFIRMATION_TIMEOUT): S.RETURNING_TO_BASE,
     (S.RETURNING_TO_BASE, E.GOAL_REACHED): S.IDLE,
     (S.EMERGENCY_STOP, E.RESET): S.IDLE,
+    (S.FAILED, E.RESET): S.IDLE,  # TASK-011: FAILED ya no es terminal
+    # TASK-011: eventos tardíos ignorados bajo enclavamiento (antes NAV_FAILED ⇒ FAILED)
+    (S.EMERGENCY_STOP, E.NAV_FAILED): S.EMERGENCY_STOP,
 }
 for _s in S:
     VALID[(_s, E.EMERGENCY)] = S.EMERGENCY_STOP
-    if _s not in (S.IDLE, S.FAILED):
+    if _s not in (S.IDLE, S.FAILED, S.EMERGENCY_STOP):
         VALID[(_s, E.NAV_FAILED)] = S.FAILED
 
 
@@ -105,3 +108,59 @@ def test_immutability() -> None:
     assert m2 is not m
     with pytest.raises(AttributeError):
         m.state = S.FAILED  # type: ignore[misc]  # verifica que el dataclass es frozen
+
+
+@pytest.mark.parametrize("event", list(E))
+def test_emergency_stop_interlock_invariant(event: E) -> None:
+    m = transition(make(S.NAVIGATING_TO_DESTINATION), E.EMERGENCY)
+    try:
+        result = transition(m, event)
+    except InvalidTransition:
+        return
+    if event is E.RESET:
+        assert result.state is S.IDLE
+    else:
+        assert result.state is S.EMERGENCY_STOP
+
+
+def test_late_nav_failed_keeps_emergency_stop() -> None:
+    m = transition(transition(make(), E.START), E.EMERGENCY)
+    m2 = transition(m, E.NAV_FAILED)
+    assert m2 == m
+    assert m2.state is S.EMERGENCY_STOP
+    assert m2.resume_state is S.NAVIGATING_TO_DESTINATION
+
+
+def test_late_nav_failed_then_reset_goes_idle() -> None:
+    m = make()
+    for ev in (E.START, E.EMERGENCY, E.NAV_FAILED, E.RESET):
+        m = transition(m, ev)
+    assert m.state is S.IDLE
+
+
+def test_reset_from_failed_clears_mission() -> None:
+    m = transition(transition(make(), E.START), E.NAV_FAILED)
+    assert m.state is S.FAILED
+    m = transition(m, E.RESET)
+    assert m.state is S.IDLE
+    assert m.delivered is False
+    assert m.resume_state is None
+
+
+def test_failed_then_emergency_then_reset_clears_resume_state() -> None:
+    m = transition(make(S.FAILED), E.EMERGENCY)
+    assert m.state is S.EMERGENCY_STOP
+    assert m.resume_state is S.FAILED
+    assert transition(m, E.RESET).resume_state is None
+
+
+@pytest.mark.parametrize("event", [E.START, E.GOAL_REACHED, E.NAV_FAILED])
+def test_failed_rejects_event(event: E) -> None:
+    with pytest.raises(InvalidTransition):
+        transition(make(S.FAILED), event)
+
+
+@pytest.mark.parametrize("event", [E.DELIVERY_CONFIRMED, E.CONFIRMATION_TIMEOUT])
+def test_emergency_stop_rejects_confirmation_events(event: E) -> None:
+    with pytest.raises(InvalidTransition):
+        transition(make(S.EMERGENCY_STOP), event)

@@ -1,4 +1,21 @@
-"""Máquina de estados pura de la misión de entrega (sin ROS, sin I/O)."""
+"""Máquina de estados pura de la misión de entrega (sin ROS, sin I/O).
+
+Tabla de transiciones (cualquier combinación no listada lanza `InvalidTransition`):
+
+    IDLE                      --START--------------> NAVIGATING_TO_DESTINATION
+    NAVIGATING_TO_DESTINATION --GOAL_REACHED-------> AWAITING_CONFIRMATION
+    AWAITING_CONFIRMATION     --DELIVERY_CONFIRMED--> RETURNING_TO_BASE (delivered=True)
+    AWAITING_CONFIRMATION     --CONFIRMATION_TIMEOUT> RETURNING_TO_BASE (delivered=False)
+    RETURNING_TO_BASE         --GOAL_REACHED-------> IDLE
+    NAVIGATING/AWAITING/RETURNING --NAV_FAILED-----> FAILED
+    FAILED                    --RESET--------------> IDLE (delivered=False, resume_state=None)
+    EMERGENCY_STOP            --RESET--------------> IDLE (delivered=False, resume_state=None)
+    cualquier estado          --EMERGENCY----------> EMERGENCY_STOP (guarda resume_state)
+
+Invariante de enclavamiento: desde EMERGENCY_STOP el único evento que cambia el
+estado es RESET. NAV_FAILED y EMERGENCY son eventos tardíos legítimos y se
+ignoran (misma misión, sin excepción); el resto lanza `InvalidTransition`.
+"""
 
 from __future__ import annotations
 
@@ -68,20 +85,27 @@ _TABLE: dict[tuple[MissionState, MissionEvent], tuple[MissionState, bool | None]
     (_S.AWAITING_CONFIRMATION, _E.CONFIRMATION_TIMEOUT): (_S.RETURNING_TO_BASE, False),
     (_S.RETURNING_TO_BASE, _E.GOAL_REACHED): (_S.IDLE, None),
     (_S.EMERGENCY_STOP, _E.RESET): (_S.IDLE, False),
+    (_S.FAILED, _E.RESET): (_S.IDLE, False),
 }
 
+# Eventos tardíos legítimos que el enclavamiento de EMERGENCY_STOP ignora.
+_LATE_EVENTS = frozenset({_E.NAV_FAILED, _E.EMERGENCY})
 _NAV_FAILED_EXCLUDED = frozenset({_S.IDLE, _S.FAILED})
 
 
 def transition(m: Mission, event: MissionEvent) -> Mission:
     """Aplica `event` a `m` y devuelve una nueva misión (no muta).
 
+    Ver la tabla de transiciones en el docstring del módulo. Desde
+    EMERGENCY_STOP solo `RESET` cambia el estado (enclavamiento); `NAV_FAILED`
+    y `EMERGENCY` se ignoran devolviendo la misma misión.
+
     Raises:
         InvalidTransition: si la combinación estado/evento no es válida.
     """
+    if m.state is _S.EMERGENCY_STOP and event in _LATE_EVENTS:
+        return m  # enclavado: conserva el resume_state original
     if event is _E.EMERGENCY:
-        if m.state is _S.EMERGENCY_STOP:
-            return m  # idempotente: conserva el resume_state original
         return replace(m, state=_S.EMERGENCY_STOP, resume_state=m.state)
     if event is _E.NAV_FAILED and m.state not in _NAV_FAILED_EXCLUDED:
         return replace(m, state=_S.FAILED)
