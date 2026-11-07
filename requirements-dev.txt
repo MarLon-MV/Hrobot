@@ -1,0 +1,9 @@
+# Herramientas de desarrollo y verificación (gate del DoD del orquestador).
+# Instalar: python3 -m pip install -r requirements-dev.txt
+# Los paquetes de ROS 2 (rclpy, nav2_*, etc.) NO van aquí: se instalan con apt/rosdep.
+pytest>=8,<9
+pytest-cov>=5
+ruff>=0.5
+mypy>=1.10
+PyYAML>=6
+types-PyYAML>=6

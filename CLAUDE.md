@@ -7,6 +7,9 @@ Flujo `Manager → Coder ↔ Reviewer` orquestado por `scripts/orchestrator.py`.
 
 ## Comandos rápidos
 ```bash
+# Instalar herramientas de desarrollo (una vez)
+python3 -m pip install -r requirements-dev.txt
+
 # Tests / calidad (ROS 2 Jazzy + Python, ver .claude/architecture_rules.md)
 PYTHONPATH=src/hrobot_core pytest -q
 PYTHONPATH=src/hrobot_core pytest -q --cov=hrobot_core --cov-fail-under=85
