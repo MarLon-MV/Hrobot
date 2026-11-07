@@ -39,5 +39,11 @@ module = ["rclpy", "rclpy.*", "sensor_msgs", "sensor_msgs.*", "geometry_msgs", "
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["hrobot_core.adapters.*_node"]
+# mypy no admite "*" dentro de un componente (p. ej. "*_node"): se listan los módulos.
+# Añadir aquí cada nuevo nodo en su propia tarea.
+module = [
+    "hrobot_core.adapters.ld19_node",
+    "hrobot_core.adapters.supervisor_node",
+    "hrobot_core.adapters.mission_node",
+]
 disallow_subclassing_any = false
