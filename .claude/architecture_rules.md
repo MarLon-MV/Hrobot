@@ -6,7 +6,7 @@ Robot móvil autónomo (AMR) para distribución intrahospitalaria de medicamento
 
 - **Base:** iRobot Create 3 (control diferencial, odometría, potencia) vía ROS 2 nativo (`/odom`, `/cmd_vel`, `/tf`).
 - **Cómputo:** Raspberry Pi 5 (Ubuntu 24.04 aarch64) ejecutando Nav2, sensores y lógica de misión.
-- **Percepción:** LiDAR 2D **Youyeetoo FHL-LD19** (LD19 de LDROBOT; UART 230400 baud, 10 Hz, 12 puntos/trama; `/scan`, `sensor_msgs/LaserScan`, frame `laser`). Referencia: *LD19 Development Manual* (v2.3+). Variante confirmada: **FHL-LD19** (no P ni Plus). Confirmar su adaptador USB-UART.
+- **Percepción:** LiDAR 2D **Youyeetoo FHL-LD19** (LD19 de LDROBOT; UART 230400 baud, 10 Hz, 12 puntos/trama; `/scan`, `sensor_msgs/LaserScan`, frame `laser`). Referencia: *LD19 Development Manual* (v2.3+). Variante confirmada: **FHL-LD19** (no P ni Plus). Confirmar su adaptador USB-UART. El LD19 usa un sistema **levógiro con ángulo horario** (0° = frente); el adapter debe convertir a REP-103 (`angle_ros = 2π − angle_ld19`) y la orientación de montaje se corrige en el TF, no en el parser.
 - **Localización:** AMCL sobre mapa estático. **Mapeo:** `slam_toolbox` (o Cartographer) con loop closure.
 - **Supervisión:** RViz2 (tf2, scan, costmaps, plan).
 - **Dominio crítico:** transporte de medicamentos ⇒ la seguridad prevalece sobre la velocidad de desarrollo.
