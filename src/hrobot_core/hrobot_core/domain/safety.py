@@ -14,6 +14,7 @@ from hrobot_core.domain.geometry import normalize_angle
 
 STOP_FACTOR = 0.0
 FREE_FACTOR = 1.0
+_RUN_TOLERANCE_RAD = 1e-9  # tolerancia de coma flotante en el límite del tramo
 
 
 @dataclass(frozen=True)
@@ -32,12 +33,18 @@ class SafetyConfig:
         degraded_factor: Tope de velocidad en ``(0, 1)`` cuando la fracción
             válida es positiva pero menor que ``min_valid_ratio``. Valor
             inicial a calibrar con scans reales.
+        max_invalid_run_rad: Anchura (rad) de un tramo contiguo de rayos
+            inválidos (``n_rayos × |angle_increment|``) a partir de la cual se
+            degrada la velocidad, en ``(0, π]``. El límite es inclusivo (con
+            tolerancia 1e-9). Estimación inicial de 8°, a calibrar con scans
+            reales.
 
     Raises:
         ValueError: Si algún valor de distancia/ángulo/tiempo no es finito o
             <= 0, si ``stop_distance >= slow_distance``, si
             ``min_valid_ratio`` no es finito en ``(0, 1]`` o si
-            ``degraded_factor`` no es finito en ``(0, 1)``.
+            ``degraded_factor`` no es finito en ``(0, 1)`` o si
+            ``max_invalid_run_rad`` no es finito en ``(0, π]``.
     """
 
     stop_distance: float = 0.35
@@ -46,6 +53,7 @@ class SafetyConfig:
     stale_timeout: float = 0.5
     min_valid_ratio: float = 0.70
     degraded_factor: float = 0.30
+    max_invalid_run_rad: float = math.radians(8.0)
 
     def __post_init__(self) -> None:
         values = {
@@ -65,6 +73,9 @@ class SafetyConfig:
         degraded = self.degraded_factor
         if not math.isfinite(degraded) or not 0.0 < degraded < 1.0:
             raise ValueError(f"degraded_factor must be in (0, 1), got {degraded!r}")
+        run = self.max_invalid_run_rad
+        if not math.isfinite(run) or not 0.0 < run <= math.pi:
+            raise ValueError(f"max_invalid_run_rad must be in (0, pi], got {run!r}")
 
 
 @dataclass(frozen=True)
@@ -98,6 +109,25 @@ def _linear_factor(distance: float, cfg: SafetyConfig) -> float:
     return min(FREE_FACTOR, max(STOP_FACTOR, (distance - cfg.stop_distance) / span))
 
 
+def _has_long_invalid_run(
+    cone: list[tuple[float, bool]], angle_increment: float, cfg: SafetyConfig
+) -> bool:
+    """Indica si algún tramo contiguo de rayos inválidos alcanza el umbral.
+
+    ``cone`` contiene ``(ángulo normalizado, válido)``; se ordena por ángulo para
+    que un hueco que cruza el índice 0 del arreglo sea un único tramo.
+    """
+    step = abs(angle_increment)
+    if step == 0.0:
+        return False
+    run = 0
+    for _, valid in sorted(cone, key=lambda item: item[0]):
+        run = 0 if valid else run + 1
+        if run * step >= cfg.max_invalid_run_rad - _RUN_TOLERANCE_RAD:
+            return True
+    return False
+
+
 def speed_factor(scan: ScanData, cfg: SafetyConfig) -> float:
     """Calcula el factor de velocidad en [0.0, 1.0] a partir del scan.
 
@@ -121,6 +151,14 @@ def speed_factor(scan: ScanData, cfg: SafetyConfig) -> float:
     cambios; si ``0 < fracción < cfg.min_valid_ratio`` el resultado es
     ``min(factor, cfg.degraded_factor)``: solo se reduce la velocidad.
 
+    Degradación por contigüidad: los rayos del cono se ordenan por ángulo
+    normalizado (no por índice) y un tramo es una secuencia de rayos inválidos
+    consecutivos; cualquier rayo válido (incluido ``+inf``) lo interrumpe. Si su
+    anchura ``n × |angle_increment|`` es ``>= cfg.max_invalid_run_rad`` (con
+    tolerancia 1e-9) se aplica el mismo tope ``cfg.degraded_factor`` (sin
+    acumularse con la regla de la fracción). Con ``angle_increment == 0`` esta
+    regla no se aplica. Solo cuentan los rayos dentro del cono.
+
     Args:
         scan: Datos del scan.
         cfg: Configuración de seguridad.
@@ -133,6 +171,7 @@ def speed_factor(scan: ScanData, cfg: SafetyConfig) -> float:
     nearest = math.inf
     valid_rays = 0
     cone_rays = 0
+    cone: list[tuple[float, bool]] = []
     for index, distance in enumerate(scan.ranges):
         raw_angle = scan.angle_min + index * scan.angle_increment
         if not math.isfinite(raw_angle):
@@ -142,14 +181,18 @@ def speed_factor(scan: ScanData, cfg: SafetyConfig) -> float:
         if abs(angle) > cfg.front_half_angle:
             continue
         cone_rays += 1
-        if distance == math.inf:
-            valid_rays += 1
-        elif math.isfinite(distance) and scan.range_min <= distance <= scan.range_max:
+        is_valid = distance == math.inf or (
+            math.isfinite(distance) and scan.range_min <= distance <= scan.range_max
+        )
+        cone.append((angle, is_valid))
+        if is_valid:
             valid_rays += 1
             nearest = min(nearest, distance)
     if valid_rays == 0:
         return STOP_FACTOR
     factor = FREE_FACTOR if nearest == math.inf else _linear_factor(nearest, cfg)
-    if valid_rays / cone_rays < cfg.min_valid_ratio:
+    if valid_rays / cone_rays < cfg.min_valid_ratio or _has_long_invalid_run(
+        cone, scan.angle_increment, cfg
+    ):
         return min(factor, cfg.degraded_factor)
     return factor

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import random
 
 import pytest
 from hrobot_core.domain.safety import SafetyConfig, ScanData, speed_factor
@@ -212,7 +213,10 @@ def hundred(prefix: list[float], rest: list[float]) -> ScanData:
 
 @pytest.mark.parametrize(
     ("n_nan", "expected"),
-    [(29, 1.0), (30, 1.0), (31, 0.30), (99, 0.30), (100, 0.0)],
+    # TASK-017: 29 y 30 NaN contiguos (0.29/0.30 rad > 8°) ahora degradan por
+    # contigüidad; el límite de la fracción se conserva en
+    # test_valid_ratio_thresholds_scattered con NaN dispersos.
+    [(29, 0.30), (30, 0.30), (31, 0.30), (99, 0.30), (100, 0.0)],
 )
 def test_valid_ratio_thresholds(n_nan: int, expected: float) -> None:
     scan = hundred([NAN] * n_nan, [INF] * (100 - n_nan))
@@ -252,3 +256,157 @@ def test_realistic_450_ray_scan_with_nan_band_is_degraded() -> None:
     ranges = [NAN if abs(-math.pi + i * inc) <= 0.2 else INF for i in range(450)]
     scan = make_scan(ranges, angle_min=-math.pi, inc=inc)
     assert speed_factor(scan, CFG) == pytest.approx(0.30)
+
+
+# --- TASK-017: tramos contiguos de rayos inválidos ---------------------------
+
+N450 = 450
+INC450 = 2 * math.pi / N450
+FRONT = N450 // 2  # índice del rayo a 0 rad
+OBSTACLE_05_FACTOR = (0.5 - CFG.stop_distance) / (CFG.slow_distance - CFG.stop_distance)
+INC360 = 2 * math.pi / 360
+
+
+def scan450(invalid: dict[int, float] | None = None) -> ScanData:
+    """450 rayos desde -π, todo +inf salvo los índices dados."""
+    ranges = [INF] * N450
+    for index, value in (invalid or {}).items():
+        ranges[index] = value
+    return make_scan(ranges, angle_min=-math.pi, inc=INC450)
+
+
+def front_run(n: int, value: float = NAN) -> dict[int, float]:
+    start = FRONT - n // 2
+    return dict.fromkeys(range(start, start + n), value)
+
+
+def scan360(invalid_idx: list[int]) -> ScanData:
+    ranges = [INF] * 360
+    for i in invalid_idx:
+        ranges[i] = NAN
+    return make_scan(ranges, angle_min=0.0, inc=INC360)
+
+
+def test_run_of_10_nan_degrades() -> None:
+    assert speed_factor(scan450(front_run(10)), CFG) == pytest.approx(0.30)
+
+
+def test_run_of_9_nan_is_free() -> None:
+    assert speed_factor(scan450(front_run(9)), CFG) == 1.0
+
+
+def test_nan_band_ten_degrees_degrades() -> None:
+    limit = math.radians(10)
+    band = {i: NAN for i in range(N450) if abs(-math.pi + i * INC450) <= limit}
+    assert 24 <= len(band) <= 26
+    assert speed_factor(scan450(band), CFG) == pytest.approx(0.30)
+
+
+def test_run_plus_close_obstacle_takes_minimum() -> None:
+    invalid = {**front_run(10), FRONT + 20: 0.5}
+    assert speed_factor(scan450(invalid), CFG) == pytest.approx(OBSTACLE_05_FACTOR)
+
+
+def test_split_cone_single_run_across_index_zero() -> None:
+    scan = scan360([*range(355, 360), *range(5)])
+    assert speed_factor(scan, CFG) == pytest.approx(0.30)
+
+
+def test_split_cone_two_separate_runs_not_summed() -> None:
+    scan = scan360([*range(355, 360), *range(5, 10)])
+    assert speed_factor(scan, CFG) == 1.0
+
+
+def test_scattered_failures_do_not_degrade() -> None:
+    invalid = dict.fromkeys(range(0, N450, 10), NAN)
+    assert speed_factor(scan450(invalid), CFG) == 1.0
+
+
+def test_two_runs_of_five_separated_by_valid_rays_are_free() -> None:
+    idx = [*range(FRONT - 12, FRONT - 7), *range(FRONT + 5, FRONT + 10)]
+    assert speed_factor(scan450(dict.fromkeys(idx, NAN)), CFG) == 1.0
+
+
+@pytest.mark.parametrize("bad", [-INF, NAN, 0.01, 20.0])  # range 0.05..12.0
+def test_run_formed_by_any_invalid_class(bad: float) -> None:
+    assert speed_factor(scan450(front_run(10, bad)), CFG) == pytest.approx(0.30)
+
+
+def test_posinf_in_the_middle_splits_run() -> None:
+    invalid = front_run(12)
+    del invalid[FRONT]  # +inf en medio: dos tramos < 8°
+    assert speed_factor(scan450(invalid), CFG) == 1.0
+
+
+def test_ratio_rule_still_applies_with_alternating_nan() -> None:
+    invalid = dict.fromkeys(range(0, N450, 2), NAN)
+    assert speed_factor(scan450(invalid), CFG) == pytest.approx(0.30)
+
+
+@pytest.mark.parametrize(("n_nan", "expected"), [(29, 1.0), (30, 1.0), (31, 0.30)])
+def test_valid_ratio_thresholds_scattered(n_nan: int, expected: float) -> None:
+    # Grupos de 3 NaN (0.03 rad) separados cada 4 rayos: sin tramos largos.
+    nan_idx = {i for i in range(100) if i % 4 != 3}
+    nan_idx = set(sorted(nan_idx)[:n_nan])
+    ranges = [NAN if i in nan_idx else INF for i in range(100)]
+    scan = make_scan(ranges, angle_min=-0.5, inc=0.01)
+    assert speed_factor(scan, CFG) == pytest.approx(expected)
+
+
+@pytest.mark.parametrize("value", [0.0, -0.1, NAN, INF, 3.2])
+def test_invalid_max_invalid_run_raises(value: float) -> None:
+    with pytest.raises(ValueError):
+        SafetyConfig(max_invalid_run_rad=value)
+
+
+def test_max_invalid_run_pi_is_valid() -> None:
+    assert SafetyConfig(max_invalid_run_rad=math.pi).max_invalid_run_rad == math.pi
+
+
+@pytest.mark.parametrize("inc", [0.0, -0.1])
+def test_zero_and_negative_increment_other_rules_hold(inc: float) -> None:
+    near = make_scan([0.1, NAN, NAN], angle_min=0.0, inc=inc)
+    assert speed_factor(near, CFG) == 0.0
+    blind = make_scan([NAN, NAN, NAN], angle_min=0.0, inc=inc)
+    assert speed_factor(blind, CFG) == 0.0
+
+
+def test_zero_increment_ratio_rule_still_degrades() -> None:
+    scan = make_scan([INF] + [NAN] * 9, angle_min=0.0, inc=0.0)
+    assert speed_factor(scan, CFG) == pytest.approx(0.30)
+
+
+def test_zero_increment_run_rule_not_applied() -> None:
+    # 1 de 4 inválidos (fracción 0.75 ≥ 0.70) y sin anchura medible ⇒ libre.
+    scan = make_scan([INF, INF, INF, NAN], angle_min=0.0, inc=0.0)
+    assert speed_factor(scan, CFG) == 1.0
+
+
+def test_negative_increment_run_measured_by_abs_width() -> None:
+    ranges = [INF] * N450
+    for i in range(FRONT - 5, FRONT + 5):
+        ranges[i] = NAN
+    scan = make_scan(ranges, angle_min=math.pi, inc=-INC450)
+    assert speed_factor(scan, CFG) == pytest.approx(0.30)
+
+
+def test_property_replacing_free_ray_with_nan_never_increases_factor() -> None:
+    rng = random.Random(1234)  # noqa: S311 - aleatoriedad de test con semilla fija
+    checked = 0
+    while checked < 600:
+        n = rng.randint(20, 120)
+        ranges = [
+            INF if rng.random() < 0.6 else rng.choice([NAN, 0.2, 0.8, 2.0, 30.0, -INF])
+            for _ in range(n)
+        ]
+        free = [i for i, r in enumerate(ranges) if r == INF]
+        if not free:
+            continue
+        a_min = -rng.uniform(0.1, 3.0)
+        inc = rng.uniform(0.005, 0.06)
+        before = speed_factor(make_scan(ranges, angle_min=a_min, inc=inc), CFG)
+        mutated = list(ranges)
+        mutated[rng.choice(free)] = NAN
+        after = speed_factor(make_scan(mutated, angle_min=a_min, inc=inc), CFG)
+        assert after <= before + 1e-12
+        checked += 1
