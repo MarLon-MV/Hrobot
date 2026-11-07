@@ -31,3 +31,13 @@ mypy_path = "src/hrobot_core"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src/hrobot_core"]
+
+[[tool.mypy.overrides]]
+module = ["rclpy", "rclpy.*", "sensor_msgs", "sensor_msgs.*", "geometry_msgs", "geometry_msgs.*",
+          "std_msgs", "std_msgs.*", "nav2_msgs", "nav2_msgs.*", "hrobot_interfaces", "hrobot_interfaces.*",
+          "serial", "serial.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["hrobot_core.adapters.*_node"]
+disallow_subclassing_any = false
