@@ -18,14 +18,18 @@ Test de coherencia en `tests/config/test_rviz_config.py`: carga el `.rviz` y el 
 
 ## Archivos permitidos de modificar/crear
 - `src/hrobot_bringup/rviz/hrobot_nav.rviz`
-- `tests/config/__init__.py`
+- `tests/config/__init__.py` (ya existe; no hace falta modificarlo)
 - `tests/config/test_rviz_config.py`
 
 ## Criterios de Aceptación (DoD)
 - [ ] `PYTHONPATH=src/hrobot_core pytest -q tests/config/test_rviz_config.py` termina con código 0
 - [ ] `ruff check src tests` y `ruff format --check src tests` terminan con código 0
-- [ ] El test verifica: el `.rviz` parsea como YAML; `Fixed Frame` es `map` y coincide con `global_frame` de Nav2; existe un display `TF`, un `LaserScan` con tópico `/scan` (igual al `scan_topic` de la config), un `PoseArray` en `/particle_cloud`, un `Path` en `/plan`, dos displays `Map` para los costmaps; las tools `SetInitialPose` y `SetGoal` están presentes
+- [ ] El test verifica: el `.rviz` parsea como YAML; `Fixed Frame` es `map` y coincide con `amcl.ros__parameters.global_frame_id` y con `global_costmap.global_costmap.ros__parameters.global_frame` de `nav2_params.yaml` (NO con el `global_frame` del local_costmap, que es `odom` y es correcto); existe un display `TF`, un `LaserScan` con tópico `/scan` (igual a `amcl.ros__parameters.scan_topic` y a `slam_toolbox.ros__parameters.scan_topic`), un `PoseArray` en `/particle_cloud`, un `Path` en `/plan`, dos displays `Map` para los costmaps; las tools `SetInitialPose` y `SetGoal` están presentes
 - [ ] Test negativo: si se cambia el tópico de scan en memoria, el validador detecta la incoherencia
+
+## Notas
+- Los displays de costmap deben usar los tópicos `/local_costmap/costmap` y `/global_costmap/costmap`; el test los comprueba por tópico, no por nombre de display.
+- Usar `yaml.safe_load` (PyYAML ya está en requirements-dev). Las claves de nav2 se leen con rutas explícitas; si faltan, el test falla con mensaje claro.
 
 ## Fuera de alcance
 Lanzar RViz (TASK-009), paneles personalizados, plugins propios, visualización de la misión de entrega.
