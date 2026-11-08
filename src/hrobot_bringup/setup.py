@@ -1,7 +1,16 @@
+from glob import glob
+from pathlib import Path
+
 from setuptools import find_packages, setup
 
 PACKAGE_NAME = "hrobot_bringup"
 RESOURCE_DIRS = ("launch", "config", "rviz", "maps")
+
+
+def _files_in(directory: str) -> list[str]:
+    """Archivos reales del directorio (sin marcadores de posición); puede ser vacío."""
+    return sorted(f for f in glob(directory + "/*") if Path(f).is_file())
+
 
 setup(
     name=PACKAGE_NAME,
@@ -10,7 +19,7 @@ setup(
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/" + PACKAGE_NAME]),
         ("share/" + PACKAGE_NAME, ["package.xml"]),
-        *[("share/" + PACKAGE_NAME + "/" + d, [d + "/.gitkeep"]) for d in RESOURCE_DIRS],
+        *[("share/" + PACKAGE_NAME + "/" + d, _files_in(d)) for d in RESOURCE_DIRS],
     ],
     install_requires=["setuptools"],
     zip_safe=True,
