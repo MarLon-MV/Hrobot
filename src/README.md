@@ -68,6 +68,15 @@ ros2 launch hrobot_bringup rviz.launch.py
 
 `ROS_DOMAIN_ID` y el RMW **no** se fijan en los launch: se configuran en el entorno. Offsets del LiDAR respecto a `base_link`: argumentos `laser_x/y/z/yaw` de `sensors.launch.py` (calibración humana).
 
+## Entorno de red (RPi5, PC con RViz y Create 3)
+
+Todos los equipos deben compartir:
+```bash
+export ROS_DOMAIN_ID=21
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp     # sudo apt install ros-jazzy-rmw-cyclonedds-cpp
+```
+El Create 3 se configura con el mismo dominio, el mismo RMW y namespace **`/r2`** (en su página de configuración). Sus tópicos quedan bajo ese namespace: `/r2/cmd_vel`, `/r2/odom`, etc. **No** exportes `ROS_NAMESPACE=/r2` en la RPi5: renombraría todos nuestros nodos. El namespace del Create 3 se pasa a los launch como argumento (ver `pendientes/`, TASK-023).
+
 ## Tests y calidad (desde la raíz del repo, sin ROS)
 
 ```bash

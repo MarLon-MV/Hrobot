@@ -21,7 +21,9 @@ Requiere RPi5 (o PC) con ROS 2 Jazzy, y para los últimos puntos el Create 3 y e
 - [ ] Tipo real de `cmd_vel` del Create 3 en Jazzy: `geometry_msgs/Twist` o `TwistStamped`. `supervisor_node` publica `Twist`; si hace falta `TwistStamped`, abrir tarea.
 - [ ] Qué hace el Create 3 si deja de recibir `/cmd_vel` (timeout del firmware). Debe frenar; si no, el robot sigue con la última orden.
 - [ ] Topics de odometría (`/odom`) y TF `odom → base_link` publicados por el Create 3 con los nombres esperados.
-- [ ] RMW compatible con el Create 3 (Fast DDS / Cyclone) y `ROS_DOMAIN_ID` consistente entre RPi5, Create 3 y PC con RViz.
+- [ ] Entorno acordado: `ROS_DOMAIN_ID=21`, `RMW_IMPLEMENTATION=rmw_cyclonedds_cpp`, namespace del Create 3 `/r2`. Verificar que RPi5, Create 3 y PC con RViz lo comparten (`ros2 topic list` desde la RPi5 debe mostrar `/r2/...`), y que `ros-jazzy-rmw-cyclonedds-cpp` está instalado.
+- [ ] **TF con namespace:** ejecutar `ros2 topic list | grep tf` y anotar si el Create 3 publica `/r2/tf` y `/r2/tf_static` (no `/tf`). Si es así, todos los nodos que usan TF (Nav2, AMCL, slam_toolbox, `static_transform_publisher`, RViz) necesitan remapear `/tf`→`/r2/tf` y `/tf_static`→`/r2/tf_static`: abrir tarea tras ver el resultado.
+- [ ] Nombres reales de los tópicos del Create 3 bajo `/r2` (`cmd_vel`, `odom`) y su tipo de mensaje.
 
 ## D. Parada y fallos
 - [ ] **Ctrl+C en `supervisor_node`**: ¿publica ceros antes de morir? (con `rclpy` real el contexto puede invalidarse antes; los tests con dobles no lo prueban). Si no, hace falta otra estrategia (p. ej. depender del timeout del Create 3 o un watchdog externo).
