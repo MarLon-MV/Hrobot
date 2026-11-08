@@ -18,7 +18,11 @@ setup(
     license="Apache-2.0",
     entry_points={
         "console_scripts": [
+<<<<<<< HEAD
             "ld19_node = hrobot_core.adapters.ld19_node:main",
+=======
+            "supervisor_node = hrobot_core.adapters.supervisor_node:main",
+>>>>>>> feat/TASK-016
         ],
     },
 )
