@@ -16,5 +16,9 @@ setup(
     maintainer_email="dev@example.com",
     description="Dominio, servicios y adaptadores del robot AMR hospitalario.",
     license="Apache-2.0",
-    entry_points={"console_scripts": []},
+    entry_points={
+        "console_scripts": [
+            "ld19_node = hrobot_core.adapters.ld19_node:main",
+        ],
+    },
 )
