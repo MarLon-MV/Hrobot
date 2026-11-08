@@ -81,7 +81,15 @@ def _params(nav2: Config, slam: Config) -> dict[str, Any]:
             ),
             "slam_toolbox.scan_topic": _get(slam, *sl, "scan_topic"),
         },
-        "fp": {k: _get(nav2, *fp, k) for k in ("min_vel_x", "max_vel_x", "max_vel_theta")},
+        "fp": {
+            k: _get(nav2, *fp, k)
+            for k in (
+                "desired_linear_vel",
+                "rotate_to_heading_angular_vel",
+                "use_collision_detection",
+                "allow_reversing",
+            )
+        },
     }
 
 
@@ -99,13 +107,15 @@ def _check_equal(group: dict[str, Any], expected: str, label: str) -> list[str]:
 
 def _check_velocity(nav2: Config, fp: dict[str, Any]) -> list[str]:
     errors: list[str] = []
-    max_x, max_th, min_x = fp["max_vel_x"], fp["max_vel_theta"], fp["min_vel_x"]
-    if not _is_num(max_x) or not 0.0 < max_x <= MAX_LINEAR_VEL:
-        errors.append(f"max_vel_x = {max_x!r} fuera de (0, {MAX_LINEAR_VEL}]")
-    if not _is_num(max_th) or not 0.0 < max_th <= MAX_ANGULAR_VEL:
-        errors.append(f"max_vel_theta = {max_th!r} fuera de (0, {MAX_ANGULAR_VEL}]")
-    if not _is_num(min_x) or min_x != 0.0:
-        errors.append(f"min_vel_x = {min_x!r}, se esperaba 0.0 (sin marcha atrás)")
+    vel, rot = fp["desired_linear_vel"], fp["rotate_to_heading_angular_vel"]
+    if not _is_num(vel) or not 0.0 < vel <= MAX_LINEAR_VEL:
+        errors.append(f"desired_linear_vel = {vel!r} fuera de (0, {MAX_LINEAR_VEL}]")
+    if not _is_num(rot) or not 0.0 < rot <= MAX_ANGULAR_VEL:
+        errors.append(f"rotate_to_heading_angular_vel = {rot!r} fuera de (0, {MAX_ANGULAR_VEL}]")
+    if fp["use_collision_detection"] is not True:
+        errors.append("use_collision_detection debe ser true")
+    if fp["allow_reversing"] is not False:
+        errors.append("allow_reversing debe ser false (sin marcha atrás)")
     smoother = _get(nav2, "velocity_smoother", "ros__parameters", "max_velocity")
     if not (isinstance(smoother, list) and smoother and _is_num(smoother[0])):
         errors.append(f"velocity_smoother.max_velocity inválido: {smoother!r}")
@@ -186,10 +196,8 @@ def _check_controller(nav2: Config) -> list[str]:
     fp = _get(nav2, "controller_server", "ros__parameters", "FollowPath")
     if not isinstance(fp, dict):
         return ["controller_server.FollowPath ausente"]
-    if _get(fp, "min_vel_y") != 0.0:
-        errors.append(f"min_vel_y = {fp.get('min_vel_y')!r}, se esperaba 0.0")
-    if fp.get("allow_reversing") not in (None, False):
-        errors.append("allow_reversing debe ser false")
+    if "dwb" in str(fp.get("plugin", "")):
+        errors.append("FollowPath debe usar Regulated Pure Pursuit, no DWB")
     return errors
 
 
@@ -335,10 +343,15 @@ def test_inflation_greater_than_radius(nav2: Config) -> None:
 
 def test_velocity_limits(nav2: Config) -> None:
     fp = _get(nav2, "controller_server", "ros__parameters", "FollowPath")
-    assert fp["plugin"] == "dwb_core::DWBLocalPlanner"
-    assert fp["max_vel_x"] <= 0.3
-    assert fp["max_vel_theta"] <= 1.0
-    assert fp["min_vel_x"] == 0.0
+    assert fp["plugin"] == (
+        "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
+    )
+    assert 0.0 < fp["desired_linear_vel"] <= 0.3
+    assert 0.0 < fp["rotate_to_heading_angular_vel"] <= 1.0
+    assert fp["use_collision_detection"] is True
+    assert fp["allow_reversing"] is False
+    smoother_max = _get(nav2, "velocity_smoother", "ros__parameters", "max_velocity")
+    assert fp["rotate_to_heading_angular_vel"] <= smoother_max[2]
 
 
 def test_velocity_smoother_cap(nav2: Config) -> None:
@@ -389,14 +402,28 @@ def test_neg_scan_topic_differs(nav2: Config, slam: Config) -> None:
     assert any("scan topic" in e for e in errs)
 
 
-def test_neg_max_vel_x_too_high(nav2: Config, slam: Config) -> None:
-    path = ("controller_server", "ros__parameters", "FollowPath", "max_vel_x")
-    assert any("max_vel_x" in e for e in _validate_mutated(nav2, slam, "nav2", path, 0.5))
+FP = ("controller_server", "ros__parameters", "FollowPath")
 
 
-def test_neg_min_vel_x_negative(nav2: Config, slam: Config) -> None:
-    path = ("controller_server", "ros__parameters", "FollowPath", "min_vel_x")
-    assert any("min_vel_x" in e for e in _validate_mutated(nav2, slam, "nav2", path, -0.1))
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("desired_linear_vel", 0.5),
+        ("desired_linear_vel", 0.0),
+        ("rotate_to_heading_angular_vel", 1.5),
+        ("rotate_to_heading_angular_vel", 0.0),
+        ("use_collision_detection", False),
+        ("allow_reversing", True),
+    ],
+)
+def test_neg_rpp_limits(nav2: Config, slam: Config, key: str, value: Any) -> None:
+    errs = _validate_mutated(nav2, slam, "nav2", (*FP, key), value)
+    assert any(key in e for e in errs)
+
+
+def test_neg_dwb_plugin(nav2: Config, slam: Config) -> None:
+    errs = _validate_mutated(nav2, slam, "nav2", (*FP, "plugin"), "dwb_core::DWBLocalPlanner")
+    assert any("Pure Pursuit" in e for e in errs)
 
 
 def test_neg_local_costmap_in_map_frame(nav2: Config, slam: Config) -> None:
@@ -419,7 +446,6 @@ def test_neg_sim_time_true(nav2: Config, slam: Config) -> None:
 
 
 VS = ("velocity_smoother", "ros__parameters")
-FP = ("controller_server", "ros__parameters", "FollowPath")
 
 
 def _errs(nav2: Config, slam: Config, path: tuple[str, ...], value: Any) -> list[str]:
@@ -480,12 +506,11 @@ def test_neg_smoother_feedback_invalid(nav2: Config, slam: Config) -> None:
     assert any("feedback" in e for e in _errs(nav2, slam, (*VS, "feedback"), "x"))
 
 
-def test_neg_controller_min_vel_y(nav2: Config, slam: Config) -> None:
-    assert any("min_vel_y" in e for e in _errs(nav2, slam, (*FP, "min_vel_y"), 0.1))
-
-
-def test_neg_controller_allow_reversing(nav2: Config, slam: Config) -> None:
-    assert any("allow_reversing" in e for e in _errs(nav2, slam, (*FP, "allow_reversing"), True))
+def test_yaml_has_no_dwb(nav2: Config) -> None:
+    assert "dwb" not in (CONFIG_DIR / "nav2_params.yaml").read_text(encoding="utf-8")
+    fp = _get(nav2, *FP)
+    for key in ("min_vel_x", "max_vel_x", "max_vel_theta"):
+        assert key not in fp
 
 
 def test_lifecycle_navigation_nodes(nav2: Config) -> None:

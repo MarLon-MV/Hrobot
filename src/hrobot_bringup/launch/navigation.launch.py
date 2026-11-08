@@ -20,6 +20,7 @@ from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
 CONTROLLER_RAW_TOPIC = "cmd_vel_nav_raw"
+BT_XML_NAME = "bt_navigate_no_recovery.xml"
 
 
 def validate_nav_cmd_vel_topic(topic: str) -> str:
@@ -114,7 +115,12 @@ def generate_launch_description() -> LaunchDescription:
                 ("cmd_vel_smoothed", LaunchConfiguration("nav_cmd_vel_topic")),
             ],
         ),
-        _nav_node("nav2_bt_navigator", "bt_navigator", params),
+        _nav_node(
+            "nav2_bt_navigator",
+            "bt_navigator",
+            # Va despues de params_file para sobrescribir el valor vacio del YAML.
+            [*params, {"default_nav_to_pose_bt_xml": str(bringup / "config" / BT_XML_NAME)}],
+        ),
         _lifecycle("lifecycle_manager_navigation", params),
     ]
     return LaunchDescription(

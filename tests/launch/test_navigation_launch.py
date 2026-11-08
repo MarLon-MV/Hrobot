@@ -390,6 +390,46 @@ def test_lifecycle_node_names_match_params() -> None:
     assert all(name in _strings() for name in names)
 
 
+def _bt_navigator_params() -> ast.List:
+    call = next(c for c in _node_calls() if _call_key(c) == "bt_navigator")
+    assert isinstance(call.args[2], ast.List)
+    return call.args[2]
+
+
+def _bt_xml_dict() -> ast.Dict:
+    dicts = [e for e in _bt_navigator_params().elts if isinstance(e, ast.Dict)]
+    assert len(dicts) == 1
+    return dicts[0]
+
+
+def test_bt_navigator_receives_bt_xml_from_share() -> None:
+    d = _bt_xml_dict()
+    keys = [k.value for k in d.keys if isinstance(k, ast.Constant)]
+    assert keys == ["default_nav_to_pose_bt_xml"]
+    seg = ast.get_source_segment(SRC, d.values[0]) or ""
+    assert "bringup" in seg
+    assert '"config"' in seg
+    assert "BT_XML_NAME" in seg
+    gen_src = ast.get_source_segment(SRC, _gen_func()) or ""
+    assert 'Path(get_package_share_directory("hrobot_bringup"))' in gen_src
+
+
+def test_bt_xml_name_and_file_exists() -> None:
+    assert _module_constants()["BT_XML_NAME"] == "bt_navigate_no_recovery.xml"
+    assert (BRINGUP / "config" / "bt_navigate_no_recovery.xml").is_file()
+
+
+def test_bt_xml_param_after_params_file() -> None:
+    elts = _bt_navigator_params().elts
+    shared = next(
+        i
+        for i, e in enumerate(elts)
+        if isinstance(e, ast.Starred) and isinstance(e.value, ast.Name) and e.value.id == "params"
+    )
+    override = next(i for i, e in enumerate(elts) if isinstance(e, ast.Dict))
+    assert shared < override
+
+
 @pytest.mark.parametrize("topic", ["/cmd_vel_nav", "cmd_vel_nav"])
 def test_validator_accepts(topic: str) -> None:
     assert _load_validator()(topic) == topic
