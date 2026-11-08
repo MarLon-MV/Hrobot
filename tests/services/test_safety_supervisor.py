@@ -309,7 +309,8 @@ def test_non_finite_now_raises(bad: float) -> None:
 
 
 def test_clock_going_backwards_no_exception_and_no_rise() -> None:
-    sup = make(now_s=10.0)
+    # TASK-018: el test usa pasos de 0.5 s; se amplía max_step_gap_s para que no reinicie.
+    sup = make(now_s=10.0, cfg=SupervisorConfig(max_step_gap_s=1.0))
     sup.step(10.0)
     refresh(sup, 10.5)
     before = sup.step(10.5)
@@ -403,7 +404,14 @@ def test_bench_still_requires_command() -> None:
 
 # --- configuración -------------------------------------------------------------------
 
-_FIELDS = ["max_linear", "max_angular", "cmd_timeout_s", "mission_timeout_s", "max_rise_per_s"]
+_FIELDS = [
+    "max_linear",
+    "max_angular",
+    "cmd_timeout_s",
+    "mission_timeout_s",
+    "max_rise_per_s",
+    "max_step_gap_s",
+]
 
 
 @pytest.mark.parametrize("name", _FIELDS)
@@ -418,6 +426,138 @@ def test_config_defaults() -> None:
     cfg = SupervisorConfig()
     assert cfg.max_linear == 0.3
     assert cfg.require_mission_status is True
+
+
+@pytest.mark.parametrize("ok", [0.05, 1.0])
+def test_config_max_step_gap_valid(ok: float) -> None:
+    assert SupervisorConfig(max_step_gap_s=ok).max_step_gap_s == ok
+
+
+def test_config_max_step_gap_default() -> None:
+    assert SupervisorConfig().max_step_gap_s == 0.25
+
+
+# --- reinicio de rampa por pérdida de supervisión (TASK-018) ----------------------
+
+
+def _ramp_after_gap(sup: SafetySupervisor, t0: float, n: int = 10) -> None:
+    for i in range(1, n + 1):
+        t = t0 + i * STEP_S
+        refresh(sup, t)
+        assert sup.step(t).factor == pytest.approx(i * 0.1)
+
+
+def test_gap_after_stop_restarts_ramp() -> None:
+    sup = make()
+    feed_scan(sup, 0.0, 0.35)
+    assert_stopped(sup.step(0.0), StopReason.SCAN_BLOCKED)
+    refresh(sup, 10.0)
+    out = sup.step(10.0)
+    assert out.command == VelocityCommand(0.0, 0.0)
+    assert out.factor == 0.0
+    assert out.reason is StopReason.RAMP_LIMITED
+    _ramp_after_gap(sup, 10.0)
+
+
+def test_gap_after_emergency_restarts_ramp() -> None:
+    sup = make(state=MissionState.EMERGENCY_STOP)
+    assert_stopped(sup.step(0.0), StopReason.EMERGENCY)
+    refresh(sup, 5.0)
+    out = sup.step(5.0)
+    assert out.command == VelocityCommand(0.0, 0.0)
+    assert out.reason is StopReason.RAMP_LIMITED
+    _ramp_after_gap(sup, 5.0)
+
+
+def test_gap_from_full_speed_restarts_ramp() -> None:
+    sup = make()
+    assert ramp_up(sup).factor == pytest.approx(1.0)
+    refresh(sup, 2.2)
+    out = sup.step(2.2)
+    assert out.factor == 0.0
+    assert out.reason is StopReason.RAMP_LIMITED
+    assert out.command == VelocityCommand(0.0, 0.0)
+    _ramp_after_gap(sup, 2.2)
+
+
+def test_gap_boundary_exact_does_not_restart() -> None:
+    sup = make()
+    sup.step(0.0)
+    refresh(sup, 0.25)
+    assert sup.step(0.25).factor == pytest.approx(0.25)
+
+
+def test_gap_just_above_boundary_restarts() -> None:
+    sup = make()
+    sup.step(0.0)
+    refresh(sup, 0.2500001)
+    out = sup.step(0.2500001)
+    assert out.factor == 0.0
+    assert out.reason is StopReason.RAMP_LIMITED
+
+
+def test_normal_20hz_has_no_spurious_restart() -> None:
+    sup = make()
+    prev = sup.step(0.0).factor
+    reached = None
+    for i in range(1, 61):
+        t = i * 0.05
+        refresh(sup, t)
+        out = sup.step(t)
+        assert out.factor >= prev
+        prev = out.factor
+        if reached is None and out.factor >= 1.0 - 1e-9:
+            reached = t
+    assert reached is not None
+    assert reached == pytest.approx(1.0, abs=0.1)
+    assert prev == pytest.approx(1.0)
+
+
+def test_clock_backwards_gap_measured_from_max_seen() -> None:
+    sup = make(now_s=1.0)
+    sup.step(1.0)
+    refresh(sup, 1.2)
+    assert sup.step(1.2).factor == pytest.approx(0.2)
+    refresh(sup, 1.0)
+    back = sup.step(1.0)  # reloj retrocede: sin reinicio, sin subida
+    assert back.factor == pytest.approx(0.2)
+    refresh(sup, 1.3)
+    assert sup.step(1.3).factor == pytest.approx(0.3)  # hueco 0.1 vs máximo 1.2
+
+
+def test_bench_mode_gap_restarts_ramp() -> None:
+    sup = make(state=None, cfg=BENCH)
+    sup.step(0.0)
+    sup.on_command(CMD, 10.0)
+    feed_scan(sup, 10.0)
+    out = sup.step(10.0)
+    assert out.factor == 0.0
+    assert out.reason is StopReason.RAMP_LIMITED
+
+
+def test_custom_max_step_gap_allows_longer_steps() -> None:
+    sup = make(cfg=SupervisorConfig(max_step_gap_s=1.0))
+    sup.step(0.0)
+    refresh(sup, 0.5)
+    assert sup.step(0.5).factor == pytest.approx(0.5)
+
+
+def test_property_first_step_after_gap_is_zero() -> None:
+    rng = random.Random(99)  # noqa: S311 - semilla fija, no criptográfico
+    cfg = SupervisorConfig()
+    sup = make()
+    t = 0.0
+    prev_factor = sup.step(t).factor
+    for _ in range(500):
+        gap = rng.choice([0.05, 0.1, 0.25, 0.3, 1.0, 7.0])
+        t += gap
+        refresh(sup, t)
+        out = sup.step(t)
+        if gap > cfg.max_step_gap_s:
+            assert out.factor == 0.0
+        else:
+            assert out.factor <= prev_factor + cfg.max_rise_per_s * gap + 1e-9
+        prev_factor = out.factor
 
 
 # --- propiedad -----------------------------------------------------------------------

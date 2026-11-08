@@ -39,6 +39,12 @@ class SupervisorConfig:
             emergencia nunca se ignora.
         max_rise_per_s: Cuánto puede subir el factor por segundo (bajar es
             instantáneo), > 0.
+        max_step_gap_s: Hueco máximo (s) entre dos pasos consecutivos antes de
+            considerar que se perdió la supervisión; finito y > 0. Un hueco
+            estrictamente mayor reinicia la rampa (el paso se comporta como el
+            primero: factor 0.0). Debe ser **mayor que el periodo de paso** del
+            nodo (con pasos a 20 Hz, 0.05 s; se recomienda al menos el doble):
+            un valor menor que el periodo haría que el robot nunca se mueva.
         safety: Configuración de la política de seguridad por LiDAR.
 
     Raises:
@@ -51,6 +57,7 @@ class SupervisorConfig:
     mission_timeout_s: float = 2.0
     require_mission_status: bool = True
     max_rise_per_s: float = 1.0
+    max_step_gap_s: float = 0.25
     safety: SafetyConfig = field(default_factory=SafetyConfig)
 
     def __post_init__(self) -> None:
@@ -60,6 +67,7 @@ class SupervisorConfig:
             "cmd_timeout_s": self.cmd_timeout_s,
             "mission_timeout_s": self.mission_timeout_s,
             "max_rise_per_s": self.max_rise_per_s,
+            "max_step_gap_s": self.max_step_gap_s,
         }
         for name, value in values.items():
             if not math.isfinite(value) or value <= 0.0:
@@ -164,11 +172,20 @@ class SafetySupervisor:
             self._emergency_latched = False
 
     def step(self, now_s: float) -> SupervisorOutput:
-        """Calcula la salida para el instante ``now_s``."""
+        """Calcula la salida para el instante ``now_s``.
+
+        Si el hueco desde el paso anterior supera ``max_step_gap_s`` (estrictamente)
+        se considera pérdida de supervisión: la rampa se reinicia y este paso se
+        comporta como el primero (``dt = 0``, factor previo 0.0). Por eso
+        ``max_step_gap_s`` debe ser mayor que el periodo de paso del nodo.
+        """
         _require_finite(now_s)
         prev_t = self._prev_step_t
         dt = 0.0 if prev_t is None else max(0.0, now_s - prev_t)
         self._prev_step_t = now_s if prev_t is None else max(prev_t, now_s)
+        if dt > self._cfg.max_step_gap_s:
+            self._prev_factor = 0.0
+            dt = 0.0
 
         reason = self._stop_reason(now_s)
         if reason is not StopReason.NONE or self._cmd is None or self._scan is None:
