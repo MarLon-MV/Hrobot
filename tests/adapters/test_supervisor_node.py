@@ -279,6 +279,25 @@ def test_publisher_and_qos(ros_fakes: FakeRos) -> None:
     assert (mis.reliability, mis.depth, mis.durability) == ("RELIABLE", 1, "TRANSIENT_LOCAL")
 
 
+def test_namespaced_cmd_vel_topic(ros_fakes: FakeRos) -> None:
+    _node(ros_fakes, cmd_vel_topic="/r2/cmd_vel")
+    topics = [p.topic for p in ros_fakes.publishers]
+    assert topics == ["/r2/cmd_vel"]
+    assert "/cmd_vel" not in topics
+
+
+def test_default_cmd_vel_topic(ros_fakes: FakeRos) -> None:
+    _node(ros_fakes)
+    assert [p.topic for p in ros_fakes.publishers] == [CMD_VEL_TOPIC]
+
+
+@pytest.mark.parametrize("topic", ["", "/", "cmd_vel", "r2/cmd_vel", "/r2/cmd vel", 5, None])
+def test_invalid_cmd_vel_topic_raises(ros_fakes: FakeRos, topic: Any) -> None:
+    with pytest.raises(ValueError):
+        _node(ros_fakes, cmd_vel_topic=topic)
+    assert ros_fakes.publishers == []
+
+
 def test_timer_period_matches_rate(ros_fakes: FakeRos) -> None:
     _node(ros_fakes, publish_rate_hz=10.0)
     assert ros_fakes.timers[0].period_ns == 100_000_000
@@ -294,7 +313,7 @@ def test_static_source_rules() -> None:
             assert not (isinstance(f, ast.Attribute) and f.attr == "sleep")
             if isinstance(f, ast.Attribute) and f.attr == "create_publisher":
                 assert isinstance(n.args[1], ast.Name)
-                assert n.args[1].id == "CMD_VEL_TOPIC"
+                assert n.args[1].id == "cmd_vel_topic"  # validado desde el parametro
                 pubs += 1
     assert pubs == 1
 

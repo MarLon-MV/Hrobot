@@ -430,6 +430,38 @@ def test_bt_xml_param_after_params_file() -> None:
     assert shared < override
 
 
+def test_create3_namespace_declared_default_r2() -> None:
+    arg = _declared()["create3_namespace"]
+    assert ast.literal_eval(arg["default_value"]) == "/r2"
+
+
+def test_odom_override_after_params_file() -> None:
+    gen_src = ast.get_source_segment(SRC, _gen_func()) or ""
+    assert 'odom = {"odom_topic": LaunchConfiguration(ODOM_CONFIG)}' in gen_src
+    for key in ("velocity_smoother", "bt_navigator"):
+        call = next(c for c in _node_calls() if _call_key(c) == key)
+        assert isinstance(call.args[2], ast.List)
+        elts = call.args[2].elts
+        shared = next(i for i, e in enumerate(elts) if isinstance(e, ast.Starred))
+        odom = next(i for i, e in enumerate(elts) if isinstance(e, ast.Name) and e.id == "odom")
+        assert shared < odom
+    assert 'namespaced(namespace, "/odom")' in SRC
+
+
+def test_check_topic_forbids_namespaced_cmd_vel() -> None:
+    assert 'namespaced(namespace, "/cmd_vel")' in SRC
+    assert "create3_namespace" in (ast.get_source_segment(SRC, _gen_func()) or "")
+
+
+def test_validator_rejects_namespaced_cmd_vel() -> None:
+    forbidden = ("/cmd_vel", "/r2/cmd_vel")
+    for topic in ("/r2/cmd_vel", "r2/cmd_vel", " /r2/cmd_vel/"):
+        with pytest.raises(ValueError):
+            _load_validator()(topic, forbidden=forbidden)
+    assert _load_validator()("/cmd_vel_nav", forbidden=forbidden) == "/cmd_vel_nav"
+    assert _load_validator()("/r2/cmd_vel") == "/r2/cmd_vel"  # un solo argumento: sin cambios
+
+
 @pytest.mark.parametrize("topic", ["/cmd_vel_nav", "cmd_vel_nav"])
 def test_validator_accepts(topic: str) -> None:
     assert _load_validator()(topic) == topic

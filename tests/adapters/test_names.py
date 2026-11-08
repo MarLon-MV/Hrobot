@@ -1,5 +1,6 @@
 """Valores exactos de las constantes de nombres."""
 
+import pytest
 from hrobot_core.adapters import names
 
 
@@ -15,6 +16,32 @@ def test_exact_values() -> None:
     assert names.FRAME_LASER == "laser"
     assert names.LD19_DEFAULT_PORT == "/dev/ttyUSB0"
     assert names.LD19_BAUDRATE == 230400
+
+
+@pytest.mark.parametrize(
+    ("namespace", "topic", "expected"),
+    [
+        ("/r2", "/cmd_vel", "/r2/cmd_vel"),
+        ("r2", "/cmd_vel", "/r2/cmd_vel"),
+        ("/r2/", "cmd_vel", "/r2/cmd_vel"),
+        ("", "/cmd_vel", "/cmd_vel"),
+        ("/", "/odom", "/odom"),
+    ],
+)
+def test_namespaced(namespace: str, topic: str, expected: str) -> None:
+    assert names.namespaced(namespace, topic) == expected
+
+
+@pytest.mark.parametrize(
+    ("namespace", "topic"), [("/r 2", "/cmd_vel"), (" ", "/odom"), ("/r2", "/a b")]
+)
+def test_namespaced_rejects_spaces(namespace: str, topic: str) -> None:
+    with pytest.raises(ValueError):
+        names.namespaced(namespace, topic)
+
+
+def test_default_namespace() -> None:
+    assert names.DEFAULT_CREATE3_NAMESPACE == "/r2"
 
 
 def test_cmd_vel_topics_differ() -> None:

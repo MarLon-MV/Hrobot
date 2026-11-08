@@ -7,6 +7,7 @@ No se usa nav2_bringup/navigation_launch.py: la salida final de Nav2 se remapea 
 from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
+from hrobot_core.adapters.names import namespaced
 from launch import LaunchContext, LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
@@ -21,22 +22,26 @@ from launch_ros.parameter_descriptions import ParameterValue
 
 CONTROLLER_RAW_TOPIC = "cmd_vel_nav_raw"
 BT_XML_NAME = "bt_navigate_no_recovery.xml"
+ODOM_CONFIG = "create3_odom_topic"
+FORBIDDEN_CMD_VEL = ("/cmd_vel",)
 
 
-def validate_nav_cmd_vel_topic(topic: str) -> str:
+def validate_nav_cmd_vel_topic(topic: str, forbidden: tuple[str, ...] = ("/cmd_vel",)) -> str:
     """Devuelve el topico normalizado (sin espacios) si es seguro; ValueError si no.
 
-    Rechaza vacio, /cmd_vel y el topico interno controller->smoother (CONTROLLER_RAW_TOPIC).
+    Rechaza vacio, los topicos de `forbidden` (el launch anade /<create3_namespace>/cmd_vel,
+    entrada real del Create 3) y el topico interno controller->smoother (CONTROLLER_RAW_TOPIC).
     """
     normalized = topic.strip()
     parts = [p for p in normalized.split("/") if p]
     if not parts:
         raise ValueError("nav_cmd_vel_topic no puede estar vacio")
-    if parts == ["cmd_vel"]:
-        raise ValueError(
-            f"nav_cmd_vel_topic '{topic}' resuelve a /cmd_vel: solo supervisor_node "
-            "puede publicar /cmd_vel; use /cmd_vel_nav"
-        )
+    for banned in forbidden:
+        if parts == [p for p in banned.split("/") if p]:
+            raise ValueError(
+                f"nav_cmd_vel_topic '{topic}' resuelve a {banned}: solo supervisor_node "
+                "puede publicar cmd_vel del robot; use /cmd_vel_nav"
+            )
     if parts == [CONTROLLER_RAW_TOPIC]:
         raise ValueError(
             f"nav_cmd_vel_topic '{topic}' coincide con el topico interno "
@@ -47,12 +52,19 @@ def validate_nav_cmd_vel_topic(topic: str) -> str:
 
 def _check_topic(context: LaunchContext) -> list:
     topic = context.perform_substitution(LaunchConfiguration("nav_cmd_vel_topic"))
+    namespace = context.perform_substitution(LaunchConfiguration("create3_namespace"))
     try:
-        normalized = validate_nav_cmd_vel_topic(topic)
+        forbidden = (*FORBIDDEN_CMD_VEL, namespaced(namespace, "/cmd_vel"))
+        normalized = validate_nav_cmd_vel_topic(topic, forbidden)
     except ValueError as exc:
         raise RuntimeError(str(exc)) from exc
     # Sobrescribe el argumento con el valor normalizado: el remapeo lo resuelve despues.
     return [SetLaunchConfiguration("nav_cmd_vel_topic", normalized)]
+
+
+def _set_odom_topic(context: LaunchContext) -> list:
+    namespace = context.perform_substitution(LaunchConfiguration("create3_namespace"))
+    return [SetLaunchConfiguration(ODOM_CONFIG, namespaced(namespace, "/odom"))]
 
 
 def _nav_node(package: str, executable: str, params: list, remappings: list | None = None) -> Node:
@@ -80,11 +92,16 @@ def generate_launch_description() -> LaunchDescription:
     bringup = Path(get_package_share_directory("hrobot_bringup"))
     use_sim_time = ParameterValue(LaunchConfiguration("use_sim_time"), value_type=bool)
     params = [LaunchConfiguration("params_file"), {"use_sim_time": use_sim_time}]
+    # Va despues de params_file: sobrescribe odom_topic del YAML con <namespace>/odom.
+    odom = {"odom_topic": LaunchConfiguration(ODOM_CONFIG)}
 
     includes = [
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(str(bringup / "launch" / f"{name}.launch.py")),
-            launch_arguments={"use_sim_time": LaunchConfiguration("use_sim_time")}.items(),
+            launch_arguments={
+                "use_sim_time": LaunchConfiguration("use_sim_time"),
+                "create3_namespace": LaunchConfiguration("create3_namespace"),
+            }.items(),
         )
         for name in ("sensors", "safety")
     ]
@@ -109,7 +126,7 @@ def generate_launch_description() -> LaunchDescription:
         _nav_node(
             "nav2_velocity_smoother",
             "velocity_smoother",
-            params,
+            [*params, odom],
             [
                 ("cmd_vel", CONTROLLER_RAW_TOPIC),
                 ("cmd_vel_smoothed", LaunchConfiguration("nav_cmd_vel_topic")),
@@ -119,7 +136,11 @@ def generate_launch_description() -> LaunchDescription:
             "nav2_bt_navigator",
             "bt_navigator",
             # Va despues de params_file para sobrescribir el valor vacio del YAML.
-            [*params, {"default_nav_to_pose_bt_xml": str(bringup / "config" / BT_XML_NAME)}],
+            [
+                *params,
+                {"default_nav_to_pose_bt_xml": str(bringup / "config" / BT_XML_NAME)},
+                odom,
+            ],
         ),
         _lifecycle("lifecycle_manager_navigation", params),
     ]
@@ -128,10 +149,12 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument("use_sim_time", default_value="false"),
             DeclareLaunchArgument("map", description="Ruta al .yaml del mapa (obligatorio)"),
             DeclareLaunchArgument("nav_cmd_vel_topic", default_value="/cmd_vel_nav"),
+            DeclareLaunchArgument("create3_namespace", default_value="/r2"),
             DeclareLaunchArgument(
                 "params_file", default_value=str(bringup / "config" / "nav2_params.yaml")
             ),
             OpaqueFunction(function=_check_topic),
+            OpaqueFunction(function=_set_odom_topic),
             *includes,
             *localization,
             *navigation,

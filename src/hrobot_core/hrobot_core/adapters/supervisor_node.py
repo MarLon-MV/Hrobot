@@ -81,6 +81,7 @@ _SUPERVISOR_KEYS = (
     "max_step_gap_s",
 )
 _REQUIRE_MISSION_PARAM = "require_mission_status"
+CMD_VEL_PARAM = "cmd_vel_topic"
 
 
 def _as_float(name: str, value: Any) -> float:
@@ -121,6 +122,19 @@ def build_config(values: dict[str, Any]) -> tuple[SupervisorConfig, float]:
     return cfg, rate
 
 
+def validate_topic(value: Any) -> str:
+    """Valida el tópico de salida de velocidad: str no vacío y absoluto.
+
+    Raises:
+        ValueError: Si no es str, está vacío, es relativo o contiene espacios.
+    """
+    if not isinstance(value, str) or not value.startswith("/") or len(value.strip("/")) == 0:
+        raise ValueError(f"parameter {CMD_VEL_PARAM} must be an absolute topic, got {value!r}")
+    if any(c.isspace() for c in value):
+        raise ValueError(f"parameter {CMD_VEL_PARAM} must not contain spaces, got {value!r}")
+    return value
+
+
 def _make_twist(linear_x: float, angular_z: float) -> Twist:
     msg = Twist()
     msg.linear.x = float(linear_x)
@@ -147,6 +161,7 @@ class SupervisorNode(Node):
             name: self.declare_parameter(name, default).value for name, default in defaults.items()
         }
         cfg, rate = build_config(values)
+        cmd_vel_topic = validate_topic(self.declare_parameter(CMD_VEL_PARAM, CMD_VEL_TOPIC).value)
         self._supervisor = SafetySupervisor(cfg)
         self._last_reason: StopReason | None = None
         self._last_reverse = False
@@ -157,7 +172,7 @@ class SupervisorNode(Node):
             reliability=ReliabilityPolicy.RELIABLE,
             durability=DurabilityPolicy.TRANSIENT_LOCAL,
         )
-        self._pub = self.create_publisher(Twist, CMD_VEL_TOPIC, reliable)
+        self._pub = self.create_publisher(Twist, cmd_vel_topic, reliable)
         self.create_subscription(Twist, NAV_CMD_VEL_TOPIC, self._on_nav_cmd, reliable)
         self.create_subscription(LaserScan, SCAN_TOPIC, self._on_scan, qos_profile_sensor_data)
         self.create_subscription(MissionStatus, MISSION_STATUS_TOPIC, self._on_mission, mission_qos)

@@ -133,6 +133,15 @@ def test_safety_require_mission_status_default_true_and_documented() -> None:
     assert "banco" in text
 
 
+def test_safety_declares_create3_namespace_and_passes_cmd_vel_topic() -> None:
+    path = LAUNCH_DIR / "safety.launch.py"
+    assert _declared_args(_tree(path))["create3_namespace"] == "/r2"
+    text = path.read_text(encoding="utf-8")
+    assert 'namespaced(namespace, "/cmd_vel")' in text
+    assert '"cmd_vel_topic"' in text
+    assert "hrobot_core.adapters.names" in text
+
+
 def test_executables_exist_as_console_scripts() -> None:
     scripts = _console_scripts()
     assert {"ld19_node", "supervisor_node"} <= scripts
