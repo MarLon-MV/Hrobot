@@ -436,7 +436,19 @@ def run_task(task: Task, base: str, coder: AgentFn, reviewer: AgentFn, max_iter:
         review = ""
         for i in range(1, max_iter + 1):
             log.info("=== %s · iteración %d/%d · Coder ===", task.task_id, i, max_iter)
-            coder(coder_sys, coder_prompt(task, in_progress_path, feedback, i))
+            coder_out = coder(coder_sys, coder_prompt(task, in_progress_path, feedback, i)) or ""
+            tail = "\n".join(coder_out.strip().splitlines()[-12:])
+            if tail:
+                log.info("Respuesta del Coder (final):\n%s", tail)
+            blocked = [ln.strip() for ln in coder_out.splitlines() if ln.strip().startswith("BLOCKED:")]
+            if blocked:
+                rollback(base, task.branch, created)
+                created = False
+                print(f"\n⛔ {task.task_id} BLOQUEADA por el Coder (no es un fallo de código):")
+                for ln in blocked:
+                    print(f"   {ln}")
+                print("   Resuelve el bloqueo (spec o prerrequisito) y relanza; la rama se eliminó y la tarea sigue en backlog.")
+                return EXIT_ESCALATED
             discarded = discard_out_of_scope_worktree(task)
             if discarded:
                 log.warning("Descartados cambios fuera de alcance sin commitear: %s", discarded)
