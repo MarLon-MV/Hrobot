@@ -1,8 +1,8 @@
 # Parámetros Nav2 (ROS 2 Jazzy) para el AMR hospitalario.
 # Frames REP-105: map -> odom -> base_link -> laser. Tópicos: /scan, /odom.
-# Solo se incluyen parámetros conocidos; el resto usa los valores por defecto de Nav2.
+# Valores tomados de docs/nav2_jazzy_defaults.yaml salvo los fijados por el proyecto.
 # NO validado contra una instalación real de Nav2: ver "Verificación humana" de TASK-007.
-# Remapeo de /cmd_vel: fuera de alcance (TASK-009).
+# Remapeo de /cmd_vel: lo hace navigation.launch.py (TASK-020).
 
 amcl:
   ros__parameters:
@@ -12,8 +12,40 @@ amcl:
     odom_frame_id: "odom"
     scan_topic: /scan
     robot_model_type: "nav2_amcl::DifferentialMotionModel"
+    laser_model_type: "likelihood_field"
     set_initial_pose: false  # la pose inicial se fija con RViz (SetInitialPose)
     # TODO(verify): alpha1..alpha5, laser_max_range, min/max_particles según el robot real
+    alpha1: 0.2
+    alpha2: 0.2
+    alpha3: 0.2
+    alpha4: 0.2
+    alpha5: 0.2
+    beam_skip_distance: 0.5
+    beam_skip_error_threshold: 0.9
+    beam_skip_threshold: 0.3
+    do_beamskip: false
+    lambda_short: 0.1
+    laser_likelihood_max_dist: 2.0
+    laser_max_range: 100.0  # TODO(verify): el LD19 alcanza 12 m
+    laser_min_range: -1.0
+    max_beams: 60
+    max_particles: 2000  # TODO(verify)
+    min_particles: 500  # TODO(verify)
+    pf_err: 0.05
+    pf_z: 0.99
+    recovery_alpha_fast: 0.0
+    recovery_alpha_slow: 0.0
+    resample_interval: 1
+    save_pose_rate: 0.5
+    sigma_hit: 0.2
+    tf_broadcast: true
+    transform_tolerance: 1.0
+    update_min_a: 0.2  # TODO(verify)
+    update_min_d: 0.25  # TODO(verify)
+    z_hit: 0.5
+    z_max: 0.05
+    z_rand: 0.5
+    z_short: 0.05
 
 bt_navigator:
   ros__parameters:
@@ -21,13 +53,43 @@ bt_navigator:
     global_frame: map
     robot_base_frame: base_link
     odom_topic: /odom
-    # TODO(verify): plugin_lib_names y árboles de comportamiento (se usan los por defecto)
+    bt_loop_duration: 10
+    default_server_timeout: 20
+    wait_for_service_timeout: 1000
+    action_server_result_timeout: 900.0
+    # Solo navigate_to_pose: no hay behavior_server ni waypoint_follower (sin recuperaciones).
+    navigators: ["navigate_to_pose"]
+    navigate_to_pose:
+      plugin: "nav2_bt_navigator::NavigateToPoseNavigator"
+    # TODO(human): ruta al XML instalado (share/hrobot_bringup/config/bt_navigate_no_recovery.xml)
+    # El YAML no puede llevar rutas absolutas; pasar la ruta desde el launch (fuera de alcance).
+    default_nav_to_pose_bt_xml: ""
+    error_code_names:
+      - compute_path_error_code
+      - follow_path_error_code
 
 controller_server:
   ros__parameters:
     use_sim_time: false
     controller_frequency: 20.0
+    costmap_update_timeout: 0.30
+    min_x_velocity_threshold: 0.001
+    min_y_velocity_threshold: 0.5
+    min_theta_velocity_threshold: 0.001
+    failure_tolerance: 0.3
+    progress_checker_plugins: ["progress_checker"]
+    goal_checker_plugins: ["general_goal_checker"]
     controller_plugins: ["FollowPath"]
+    use_realtime_priority: false
+    progress_checker:
+      plugin: "nav2_controller::SimpleProgressChecker"
+      required_movement_radius: 0.5  # TODO(verify)
+      movement_time_allowance: 10.0  # TODO(verify)
+    general_goal_checker:
+      stateful: true
+      plugin: "nav2_controller::SimpleGoalChecker"
+      xy_goal_tolerance: 0.25  # TODO(verify)
+      yaw_goal_tolerance: 0.25  # TODO(verify)
     FollowPath:
       plugin: "dwb_core::DWBLocalPlanner"
       # Robot diferencial, sin marcha atrás ni movimiento lateral.
@@ -37,18 +99,26 @@ controller_server:
       max_vel_y: 0.0
       max_vel_theta: 0.8
       # TODO(verify): acc_lim_*, decel_lim_*, critics y escalas de trayectoria (calibrar con el robot)
+      # Los defaults de Jazzy usan MPPI, no DWB: no hay valores de referencia para estos campos.
 
 planner_server:
   ros__parameters:
     use_sim_time: false
+    expected_planner_frequency: 20.0
+    costmap_update_timeout: 1.0
     planner_plugins: ["GridBased"]
     GridBased:
-      plugin: "nav2_navfn_planner::NavfnPlanner"  # TODO(verify): nombre del plugin en Jazzy
+      plugin: "nav2_navfn_planner::NavfnPlanner"
+      tolerance: 0.5  # TODO(verify)
+      use_astar: false
+      allow_unknown: true  # TODO(verify)
 
 local_costmap:
   local_costmap:
     ros__parameters:
       use_sim_time: false
+      update_frequency: 5.0
+      publish_frequency: 2.0
       global_frame: odom
       robot_base_frame: base_link
       rolling_window: true
@@ -66,6 +136,11 @@ local_costmap:
           data_type: "LaserScan"
           marking: true
           clearing: true
+          max_obstacle_height: 2.0
+          raytrace_max_range: 3.0  # TODO(verify)
+          raytrace_min_range: 0.0
+          obstacle_max_range: 2.5  # TODO(verify)
+          obstacle_min_range: 0.0
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
@@ -75,10 +150,13 @@ global_costmap:
   global_costmap:
     ros__parameters:
       use_sim_time: false
+      update_frequency: 1.0
+      publish_frequency: 1.0
       global_frame: map
       robot_base_frame: base_link
       resolution: 0.05
       robot_radius: 0.17
+      track_unknown_space: true
       plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
@@ -92,6 +170,11 @@ global_costmap:
           data_type: "LaserScan"
           marking: true
           clearing: true
+          max_obstacle_height: 2.0
+          raytrace_max_range: 3.0  # TODO(verify)
+          raytrace_min_range: 0.0
+          obstacle_max_range: 2.5  # TODO(verify)
+          obstacle_min_range: 0.0
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
@@ -106,10 +189,18 @@ velocity_smoother:
   ros__parameters:
     use_sim_time: false
     odom_topic: /odom
+    smoothing_frequency: 20.0
+    stamp_smoothed_velocity_with_smoothing_time: false
+    scale_velocities: false
+    feedback: "OPEN_LOOP"
     # [x, y, theta] en m/s, m/s, rad/s
     max_velocity: [0.3, 0.0, 1.0]
-    min_velocity: [0.0, 0.0, -1.0]  # TODO(verify): min_velocity[0] = 0.0 evita marcha atrás
-    # TODO(verify): max_accel, max_decel, smoothing_frequency, feedback
+    min_velocity: [0.0, 0.0, -1.0]  # min_velocity[0] = 0.0 evita marcha atrás
+    max_accel: [2.5, 0.0, 3.2]  # TODO(verify): aceleraciones del Create 3 real
+    max_decel: [-2.5, 0.0, -3.2]  # TODO(verify): deceleraciones del Create 3 real
+    odom_duration: 0.1
+    deadband_velocity: [0.0, 0.0, 0.0]
+    velocity_timeout: 1.0
 
 lifecycle_manager_localization:
   ros__parameters:
@@ -122,4 +213,4 @@ lifecycle_manager_navigation:
     use_sim_time: false
     autostart: true
     node_names: ["controller_server", "planner_server", "velocity_smoother", "bt_navigator"]
-    # TODO(verify): añadir behavior_server / smoother_server / waypoint_follower si se usan
+    # Sin behavior_server / smoother_server / waypoint_follower (sin recuperaciones ni marcha atrás).

@@ -146,6 +146,101 @@ def _check_misc(nav2: Config, slam: Config) -> list[str]:
     return errors
 
 
+def _check_smoother(nav2: Config) -> list[str]:
+    errors: list[str] = []
+    sm = _get(nav2, "velocity_smoother", "ros__parameters")
+    if not isinstance(sm, dict):
+        return ["velocity_smoother: falta ros__parameters"]
+    vmax, vmin = sm.get("max_velocity"), sm.get("min_velocity")
+    if not (isinstance(vmin, list) and len(vmin) == 3 and all(_is_num(v) for v in vmin)):
+        errors.append(f"velocity_smoother.min_velocity inválido: {vmin!r}")
+    else:
+        if vmin[0] != 0.0:
+            errors.append(f"velocity_smoother.min_velocity[0] = {vmin[0]!r}, se esperaba 0.0")
+        if vmin[1] != 0.0:
+            errors.append(f"velocity_smoother.min_velocity[1] = {vmin[1]!r}, se esperaba 0.0")
+    if isinstance(vmax, list) and len(vmax) == 3 and all(_is_num(v) for v in vmax):
+        if vmax[1] != 0.0:
+            errors.append(f"velocity_smoother.max_velocity[1] = {vmax[1]!r}, se esperaba 0.0")
+    else:
+        errors.append(f"velocity_smoother.max_velocity inválido: {vmax!r}")
+    for key in ("max_accel", "max_decel"):
+        val = sm.get(key)
+        if not (isinstance(val, list) and len(val) == 3 and all(_is_num(v) for v in val)):
+            errors.append(f"velocity_smoother.{key} ausente o no numérico: {val!r}")
+    decel = sm.get("max_decel")
+    if isinstance(decel, list) and decel and _is_num(decel[0]) and decel[0] >= 0.0:
+        errors.append(f"velocity_smoother.max_decel[0] = {decel[0]!r} debe ser negativa")
+    freq = sm.get("smoothing_frequency")
+    if not _is_num(freq) or freq <= 0.0:
+        errors.append(f"velocity_smoother.smoothing_frequency inválida: {freq!r}")
+    if sm.get("feedback") not in ("OPEN_LOOP", "CLOSED_LOOP"):
+        errors.append(f"velocity_smoother.feedback inválido: {sm.get('feedback')!r}")
+    if sm.get("odom_topic") != "/odom":
+        errors.append(f"velocity_smoother.odom_topic = {sm.get('odom_topic')!r}, se esperaba /odom")
+    return errors
+
+
+def _check_controller(nav2: Config) -> list[str]:
+    errors: list[str] = []
+    fp = _get(nav2, "controller_server", "ros__parameters", "FollowPath")
+    if not isinstance(fp, dict):
+        return ["controller_server.FollowPath ausente"]
+    if _get(fp, "min_vel_y") != 0.0:
+        errors.append(f"min_vel_y = {fp.get('min_vel_y')!r}, se esperaba 0.0")
+    if fp.get("allow_reversing") not in (None, False):
+        errors.append("allow_reversing debe ser false")
+    return errors
+
+
+NAV_NODES = ["controller_server", "planner_server", "velocity_smoother", "bt_navigator"]
+
+
+def _check_lifecycle(nav2: Config) -> list[str]:
+    names = _get(nav2, "lifecycle_manager_navigation", "ros__parameters", "node_names")
+    if names != NAV_NODES:
+        return [f"lifecycle_manager_navigation.node_names = {names!r}, se esperaba {NAV_NODES!r}"]
+    return [
+        f"lifecycle: falta sección {n}.ros__parameters"
+        for n in NAV_NODES
+        if _get(nav2, n, "ros__parameters") is None
+    ]
+
+
+def _walk(node: Any, path: str = "") -> list[tuple[str, Any]]:
+    items: list[tuple[str, Any]] = []
+    if isinstance(node, dict):
+        for key, val in node.items():
+            items.extend(_walk(val, f"{path}.{key}" if path else str(key)))
+    elif isinstance(node, list):
+        for i, val in enumerate(node):
+            items.extend(_walk(val, f"{path}[{i}]"))
+    else:
+        items.append((path, node))
+    return items
+
+
+def _check_strings(nav2: Config) -> list[str]:
+    errors: list[str] = []
+    for path, val in _walk(nav2):
+        if not isinstance(val, str):
+            continue
+        if val.strip("/") == "cmd_vel" and val.startswith("/"):
+            errors.append(f"{path} apunta a /cmd_vel (solo supervisor_node lo publica)")
+        if val.startswith(("/home", "/Users")) or (val.startswith("/") and val.endswith(".xml")):
+            errors.append(f"{path} contiene ruta absoluta: {val!r}")
+    return errors
+
+
+def _check_nav_extra(nav2: Config) -> list[str]:
+    return (
+        _check_smoother(nav2)
+        + _check_controller(nav2)
+        + _check_lifecycle(nav2)
+        + _check_strings(nav2)
+    )
+
+
 def _sim_time_true(node: Any, path: str = "") -> list[str]:
     found: list[str] = []
     if isinstance(node, dict):
@@ -171,6 +266,7 @@ def validate(nav2: Config, slam: Config) -> list[str]:
     errors += _check_velocity(nav2, p["fp"])
     errors += _check_costmaps(nav2, slam)
     errors += _check_misc(nav2, slam)
+    errors += _check_nav_extra(nav2)
     return errors
 
 
@@ -320,3 +416,105 @@ def test_neg_missing_section_is_reported_not_raised(slam: Config) -> None:
 def test_neg_sim_time_true(nav2: Config, slam: Config) -> None:
     errs = _validate_mutated(nav2, slam, "nav2", ("amcl", "ros__parameters", "use_sim_time"), True)
     assert any("use_sim_time" in e for e in errs)
+
+
+VS = ("velocity_smoother", "ros__parameters")
+FP = ("controller_server", "ros__parameters", "FollowPath")
+
+
+def _errs(nav2: Config, slam: Config, path: tuple[str, ...], value: Any) -> list[str]:
+    return _validate_mutated(nav2, slam, "nav2", path, value)
+
+
+def test_smoother_real_values(nav2: Config) -> None:
+    sm = _get(nav2, *VS)
+    assert sm["min_velocity"][0] == 0.0
+    assert sm["min_velocity"][1] == 0.0
+    assert sm["max_velocity"][1] == 0.0
+    assert sm["max_velocity"][0] <= 0.3
+    assert sm["max_decel"][0] < 0.0
+    assert sm["feedback"] == "OPEN_LOOP"
+    assert sm["odom_topic"] == "/odom"
+    for key in ("max_accel", "max_decel"):
+        assert all(_is_num(v) for v in sm[key])
+    assert _is_num(sm["smoothing_frequency"])
+
+
+def test_neg_smoother_min_velocity_negative(nav2: Config, slam: Config) -> None:
+    errs = _errs(nav2, slam, (*VS, "min_velocity"), [-0.1, 0.0, -1.0])
+    assert any("min_velocity[0]" in e for e in errs)
+
+
+def test_neg_smoother_min_velocity_lateral(nav2: Config, slam: Config) -> None:
+    errs = _errs(nav2, slam, (*VS, "min_velocity"), [0.0, -0.1, -1.0])
+    assert any("min_velocity[1]" in e for e in errs)
+
+
+def test_neg_smoother_max_velocity_lateral(nav2: Config, slam: Config) -> None:
+    errs = _errs(nav2, slam, (*VS, "max_velocity"), [0.3, 0.1, 1.0])
+    assert any("max_velocity[1]" in e for e in errs)
+
+
+def test_neg_smoother_max_velocity_too_high(nav2: Config, slam: Config) -> None:
+    errs = _errs(nav2, slam, (*VS, "max_velocity"), [0.5, 0.0, 1.0])
+    assert any("max_velocity[0]" in e for e in errs)
+
+
+@pytest.mark.parametrize("key", ["max_accel", "max_decel"])
+def test_neg_smoother_accel_non_numeric(nav2: Config, slam: Config, key: str) -> None:
+    errs = _errs(nav2, slam, (*VS, key), ["a", 0.0, 1.0])
+    assert any(key in e for e in errs)
+
+
+def test_neg_smoother_decel_positive(nav2: Config, slam: Config) -> None:
+    errs = _errs(nav2, slam, (*VS, "max_decel"), [2.5, 0.0, -3.2])
+    assert any("max_decel[0]" in e for e in errs)
+
+
+def test_neg_smoother_frequency_missing(nav2: Config, slam: Config) -> None:
+    errs = _errs(nav2, slam, (*VS, "smoothing_frequency"), None)
+    assert any("smoothing_frequency" in e for e in errs)
+
+
+def test_neg_smoother_feedback_invalid(nav2: Config, slam: Config) -> None:
+    assert any("feedback" in e for e in _errs(nav2, slam, (*VS, "feedback"), "x"))
+
+
+def test_neg_controller_min_vel_y(nav2: Config, slam: Config) -> None:
+    assert any("min_vel_y" in e for e in _errs(nav2, slam, (*FP, "min_vel_y"), 0.1))
+
+
+def test_neg_controller_allow_reversing(nav2: Config, slam: Config) -> None:
+    assert any("allow_reversing" in e for e in _errs(nav2, slam, (*FP, "allow_reversing"), True))
+
+
+def test_lifecycle_navigation_nodes(nav2: Config) -> None:
+    names = _get(nav2, "lifecycle_manager_navigation", "ros__parameters", "node_names")
+    assert names == NAV_NODES
+    for n in NAV_NODES:
+        assert _get(nav2, n, "ros__parameters") is not None, n
+
+
+def test_neg_lifecycle_extra_node(nav2: Config, slam: Config) -> None:
+    path = ("lifecycle_manager_navigation", "ros__parameters", "node_names")
+    assert any("node_names" in e for e in _errs(nav2, slam, path, [*NAV_NODES, "behavior_server"]))
+
+
+def test_neg_lifecycle_missing_section(nav2: Config, slam: Config) -> None:
+    n = copy.deepcopy(nav2)
+    del n["planner_server"]
+    assert any("planner_server" in e for e in validate(n, slam))
+
+
+def test_neg_cmd_vel_absolute(nav2: Config, slam: Config) -> None:
+    errs = _errs(nav2, slam, (*VS, "cmd_vel_topic"), "/cmd_vel")
+    assert any("/cmd_vel" in e for e in errs)
+
+
+def test_neg_absolute_path(nav2: Config, slam: Config) -> None:
+    path = ("bt_navigator", "ros__parameters", "default_nav_to_pose_bt_xml")
+    assert any("ruta absoluta" in e for e in _errs(nav2, slam, path, "/Users/x/bt.xml"))
+
+
+def test_bt_xml_placeholder_is_not_a_path(nav2: Config) -> None:
+    assert _get(nav2, "bt_navigator", "ros__parameters", "default_nav_to_pose_bt_xml") == ""
