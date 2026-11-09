@@ -142,6 +142,60 @@ def test_safety_declares_create3_namespace_and_passes_cmd_vel_topic() -> None:
     assert "hrobot_core.adapters.names" in text
 
 
+TF_LAUNCHES = ("sensors", "mapping", "rviz")
+
+
+@pytest.mark.parametrize("name", TF_LAUNCHES)
+def test_tf_launches_declare_create3_namespace_and_remap_tf(name: str) -> None:
+    path = LAUNCH_DIR / f"{name}.launch.py"
+    assert _declared_args(_tree(path))["create3_namespace"] == "/r2"
+    text = path.read_text(encoding="utf-8")
+    assert "namespaced(namespace, TF_TOPIC)" in text
+    assert "namespaced(namespace, TF_STATIC_TOPIC)" in text
+    strings = _strings(_tree(path))
+    assert "tf" in strings
+    assert "tf_static" in strings
+    assert "create3_tf_topic" in strings
+    assert "create3_tf_static_topic" in strings
+
+
+def _kw_source(tree: ast.Module, text: str, executable: str, kw_name: str) -> str:
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "Node":
+            kws = {kw.arg: kw.value for kw in n.keywords}
+            exe = kws.get("executable")
+            if isinstance(exe, ast.Constant) and exe.value == executable and kw_name in kws:
+                return ast.get_source_segment(text, kws[kw_name]) or ""
+    return ""
+
+
+@pytest.mark.parametrize(
+    ("launch", "executable"),
+    [("sensors", "static_transform_publisher"), ("rviz", "rviz2")],
+)
+def test_tf_nodes_have_tf_remappings(launch: str, executable: str) -> None:
+    path = LAUNCH_DIR / f"{launch}.launch.py"
+    text = path.read_text(encoding="utf-8")
+    remap = _kw_source(_tree(path), text, executable, "remappings")
+    assert '"tf"' in remap
+    assert '"tf_static"' in remap
+
+
+def test_sensors_ld19_has_no_tf_remap() -> None:
+    path = LAUNCH_DIR / "sensors.launch.py"
+    text = path.read_text(encoding="utf-8")
+    assert _kw_source(_tree(path), text, "ld19_node", "remappings") == ""
+
+
+def test_mapping_remaps_tf_for_slam_and_forwards_namespace() -> None:
+    text = (LAUNCH_DIR / "mapping.launch.py").read_text(encoding="utf-8")
+    assert "GroupAction" in text
+    assert 'SetRemap(src="tf", dst=LaunchConfiguration(TF_CONFIG))' in text
+    assert 'SetRemap(src="tf_static", dst=LaunchConfiguration(TF_STATIC_CONFIG))' in text
+    assert '"create3_namespace": LaunchConfiguration("create3_namespace")' in text
+    assert text.count("launch_arguments=common_args.items()") == 2
+
+
 def test_executables_exist_as_console_scripts() -> None:
     scripts = _console_scripts()
     assert {"ld19_node", "supervisor_node"} <= scripts

@@ -448,6 +448,45 @@ def test_odom_override_after_params_file() -> None:
     assert 'namespaced(namespace, "/odom")' in SRC
 
 
+def _func(name: str) -> ast.FunctionDef:
+    return next(n for n in TREE.body if isinstance(n, ast.FunctionDef) and n.name == name)
+
+
+def test_tf_remappings_helper_maps_tf_and_tf_static() -> None:
+    ret = next(n for n in ast.walk(_func("_tf_remappings")) if isinstance(n, ast.Return))
+    assert isinstance(ret.value, ast.List)
+    pairs = []
+    for tup in ret.value.elts:
+        assert isinstance(tup, ast.Tuple)
+        pairs.append((_resolve(tup.elts[0]), ast.get_source_segment(SRC, tup.elts[1])))
+    assert pairs == [
+        ("tf", "LaunchConfiguration(TF_CONFIG)"),
+        ("tf_static", "LaunchConfiguration(TF_STATIC_CONFIG)"),
+    ]
+
+
+def test_all_nodes_receive_tf_remappings() -> None:
+    # Cada Node(...) del launch pasa por _nav_node o _lifecycle; ambos anaden los remapeos TF.
+    for helper in ("_nav_node", "_lifecycle"):
+        remap = _node_kwargs(_func(helper))["remappings"]
+        assert "_tf_remappings()" in (ast.get_source_segment(SRC, remap) or ""), helper
+    direct = [
+        n
+        for n in ast.walk(_gen_func())
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "Node"
+    ]
+    assert direct == []
+    assert len(_node_calls()) == len(EXPECTED_NODES)
+
+
+def test_tf_topics_set_from_namespace() -> None:
+    src = ast.get_source_segment(SRC, _func("_set_odom_topic")) or ""
+    assert "namespaced(namespace, TF_TOPIC)" in src
+    assert "namespaced(namespace, TF_STATIC_TOPIC)" in src
+    assert _module_constants()["TF_CONFIG"] == "create3_tf_topic"
+    assert _module_constants()["TF_STATIC_CONFIG"] == "create3_tf_static_topic"
+
+
 def test_check_topic_forbids_namespaced_cmd_vel() -> None:
     assert 'namespaced(namespace, "/cmd_vel")' in SRC
     assert "create3_namespace" in (ast.get_source_segment(SRC, _gen_func()) or "")

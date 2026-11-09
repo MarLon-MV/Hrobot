@@ -1,7 +1,8 @@
 """Lanza el LiDAR LD19 (ld19_node) y el TF estático base_link -> laser."""
 
-from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from hrobot_core.adapters.names import TF_STATIC_TOPIC, TF_TOPIC, namespaced
+from launch import LaunchContext, LaunchDescription
+from launch.actions import DeclareLaunchArgument, OpaqueFunction, SetLaunchConfiguration
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
@@ -10,6 +11,16 @@ LIDAR_BAUDRATE = 230400
 FRAME_BASE = "base_link"
 FRAME_LASER = "laser"
 SCAN_TOPIC = "/scan"
+TF_CONFIG = "create3_tf_topic"
+TF_STATIC_CONFIG = "create3_tf_static_topic"
+
+
+def _set_tf_topics(context: LaunchContext) -> list:
+    namespace = context.perform_substitution(LaunchConfiguration("create3_namespace"))
+    return [
+        SetLaunchConfiguration(TF_CONFIG, namespaced(namespace, TF_TOPIC)),
+        SetLaunchConfiguration(TF_STATIC_CONFIG, namespaced(namespace, TF_STATIC_TOPIC)),
+    ]
 
 
 def generate_launch_description() -> LaunchDescription:
@@ -52,10 +63,16 @@ def generate_launch_description() -> LaunchDescription:
             FRAME_LASER,
         ],
         parameters=[{"use_sim_time": use_sim_time}],
+        remappings=[
+            ("tf", LaunchConfiguration(TF_CONFIG)),
+            ("tf_static", LaunchConfiguration(TF_STATIC_CONFIG)),
+        ],
     )
     return LaunchDescription(
         [
             DeclareLaunchArgument("use_sim_time", default_value="false"),
+            DeclareLaunchArgument("create3_namespace", default_value="/r2"),
+            OpaqueFunction(function=_set_tf_topics),
             DeclareLaunchArgument("lidar_port", default_value="/dev/ttyUSB0"),
             DeclareLaunchArgument(
                 "laser_x", default_value="0.0", description="Offset x base_link->laser [m]"

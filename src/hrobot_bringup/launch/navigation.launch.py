@@ -7,7 +7,7 @@ No se usa nav2_bringup/navigation_launch.py: la salida final de Nav2 se remapea 
 from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
-from hrobot_core.adapters.names import namespaced
+from hrobot_core.adapters.names import TF_STATIC_TOPIC, TF_TOPIC, namespaced
 from launch import LaunchContext, LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
@@ -23,6 +23,8 @@ from launch_ros.parameter_descriptions import ParameterValue
 CONTROLLER_RAW_TOPIC = "cmd_vel_nav_raw"
 BT_XML_NAME = "bt_navigate_no_recovery.xml"
 ODOM_CONFIG = "create3_odom_topic"
+TF_CONFIG = "create3_tf_topic"
+TF_STATIC_CONFIG = "create3_tf_static_topic"
 FORBIDDEN_CMD_VEL = ("/cmd_vel",)
 
 
@@ -64,7 +66,19 @@ def _check_topic(context: LaunchContext) -> list:
 
 def _set_odom_topic(context: LaunchContext) -> list:
     namespace = context.perform_substitution(LaunchConfiguration("create3_namespace"))
-    return [SetLaunchConfiguration(ODOM_CONFIG, namespaced(namespace, "/odom"))]
+    return [
+        SetLaunchConfiguration(ODOM_CONFIG, namespaced(namespace, "/odom")),
+        SetLaunchConfiguration(TF_CONFIG, namespaced(namespace, TF_TOPIC)),
+        SetLaunchConfiguration(TF_STATIC_CONFIG, namespaced(namespace, TF_STATIC_TOPIC)),
+    ]
+
+
+def _tf_remappings() -> list:
+    """El Create 3 publica TF en <namespace>/tf y <namespace>/tf_static."""
+    return [
+        ("tf", LaunchConfiguration(TF_CONFIG)),
+        ("tf_static", LaunchConfiguration(TF_STATIC_CONFIG)),
+    ]
 
 
 def _nav_node(package: str, executable: str, params: list, remappings: list | None = None) -> Node:
@@ -74,7 +88,7 @@ def _nav_node(package: str, executable: str, params: list, remappings: list | No
         name=executable,
         output="screen",
         parameters=params,
-        remappings=remappings or [],
+        remappings=[*(remappings or []), *_tf_remappings()],
     )
 
 
@@ -85,6 +99,7 @@ def _lifecycle(name: str, params: list) -> Node:
         name=name,
         output="screen",
         parameters=params,
+        remappings=_tf_remappings(),
     )
 
 
