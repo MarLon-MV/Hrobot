@@ -20,6 +20,7 @@ setup(
         "console_scripts": [
             "ld19_node = hrobot_core.adapters.ld19_node:main",
             "supervisor_node = hrobot_core.adapters.supervisor_node:main",
+            "exploration_node = hrobot_core.adapters.exploration_node:main",
         ],
     },
 )

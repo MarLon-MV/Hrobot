@@ -37,3 +37,8 @@ FRAME_LASER = "laser"
 
 LD19_DEFAULT_PORT = "/dev/ttyUSB0"
 LD19_BAUDRATE = 230400
+
+MAP_TOPIC = "/map"  # publicado por slam_toolbox
+EXPLORATION_STATUS_TOPIC = "/hrobot/exploration_status"
+NAVIGATE_TO_POSE_ACTION = "navigate_to_pose"  # action server de Nav2 (bt_navigator)
+MAP_SAVER_SERVICE = "/map_saver/save_map"  # nav2_map_server (nav2_msgs/srv/SaveMap)
