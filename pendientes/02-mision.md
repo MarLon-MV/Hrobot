@@ -20,3 +20,12 @@ Hoy existen `domain/mission.py` (máquina de estados), el mensaje `MissionStatus
 
 ## Fuera de alcance por ahora
 Ascensores/puertas, multi-robot, integración con el sistema de información hospitalario.
+
+## Qué ofrece ya el Create 3 (evitar reimplementarlo)
+Topics/acciones bajo `/r2` (ver `Nodos_Topics.txt`). Decisiones de producto aún abiertas; esto solo acota las opciones.
+- **Docking:** acciones `/r2/dock` y `/r2/undock`, estado en `/r2/dock_status`. Si "volver a base" implica la estación, usarlas en lugar de lógica propia.
+- **Confirmación de entrega (decisión 2) y emergencia (decisión 3):** `/r2/interface_buttons` (botones físicos); servicio `/r2/e_stop` para detener el movimiento. Un botón podría disparar `EMERGENCY` o `DELIVERY_CONFIRMED`.
+- **Aviso al operador:** `/r2/cmd_lightring` (anillo LED) y `/r2/cmd_audio` (sonidos) para indicar navegando / esperando confirmación / emergencia, sin display ni buzzer propios.
+- **Batería:** `/r2/battery_state` para no iniciar misión con carga baja.
+- **Estado del robot:** `/r2/stop_status`, `/r2/kidnap_status`, `/r2/slip_status`, `/r2/wheel_status` (levantado, deslizamiento) para diagnósticos y condiciones de fallo.
+- **No usar para navegar:** `/r2/drive_distance`, `/r2/rotate_angle`, `/r2/navigate_to_position` competirían con Nav2 y se saltarían a `supervisor_node`.
