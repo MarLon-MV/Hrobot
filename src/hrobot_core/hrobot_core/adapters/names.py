@@ -42,3 +42,10 @@ MAP_TOPIC = "/map"  # publicado por slam_toolbox
 EXPLORATION_STATUS_TOPIC = "/hrobot/exploration_status"
 NAVIGATE_TO_POSE_ACTION = "navigate_to_pose"  # action server de Nav2 (bt_navigator)
 MAP_SAVER_SERVICE = "/map_saver/save_map"  # nav2_map_server (nav2_msgs/srv/SaveMap)
+
+# Create 3: se resuelven con namespaced(create3_namespace, ...)
+DOCK_STATUS_TOPIC = "dock_status"  # irobot_create_msgs/msg/DockStatus
+KIDNAP_STATUS_TOPIC = "kidnap_status"  # irobot_create_msgs/msg/KidnapStatus
+BATTERY_STATE_TOPIC = "battery_state"  # sensor_msgs/msg/BatteryState
+HAZARD_DETECTION_TOPIC = "hazard_detection"  # irobot_create_msgs/msg/HazardDetectionVector
+UNDOCK_ACTION = "undock"  # irobot_create_msgs/action/Undock

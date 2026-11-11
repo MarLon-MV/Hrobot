@@ -12,13 +12,27 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 PARAMS = ROOT / "src" / "hrobot_bringup" / "config" / "exploration_params.yaml"
 NODE = ROOT / "src" / "hrobot_core" / "hrobot_core" / "adapters" / "exploration_node.py"
-INT_PARAMS = ("min_frontier_size", "max_consecutive_failures", "no_frontier_confirmations")
+INT_PARAMS = (
+    "min_frontier_size",
+    "max_consecutive_failures",
+    "no_frontier_confirmations",
+    "kidnap_clear_cycles",
+)
 POSITIVE_FLOATS = (
     "blacklist_radius",
     "min_goal_distance",
     "exploration_period_s",
     "map_save_timeout_s",
+    "undock_timeout_s",
+    "status_timeout_s",
 )
+NEW_PARAMS = {
+    "create3_namespace",
+    "undock_timeout_s",
+    "status_timeout_s",
+    "kidnap_clear_cycles",
+    "min_battery_pct",
+}
 
 
 def _yaml() -> dict[str, Any]:
@@ -61,6 +75,21 @@ def test_float_params_are_finite_positive() -> None:
 def test_map_save_name_is_non_empty_str() -> None:
     v = _node_params()["map_save_name"]
     assert isinstance(v, str) and v.strip()
+
+
+def test_safety_params_declared_in_yaml_and_node() -> None:
+    assert set(_node_params()) >= NEW_PARAMS
+    assert _declared_names() >= NEW_PARAMS
+
+
+def test_create3_namespace_is_valid_str() -> None:
+    v = _node_params()["create3_namespace"]
+    assert isinstance(v, str) and v.startswith("/") and not any(c.isspace() for c in v)
+
+
+def test_min_battery_pct_in_range() -> None:
+    v = _node_params()["min_battery_pct"]
+    assert isinstance(v, float) and math.isfinite(v) and 0.0 <= v <= 100.0
 
 
 def test_map_saver_thresholds_in_range() -> None:

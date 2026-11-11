@@ -17,10 +17,16 @@ from typing import Any
 
 import pytest
 from hrobot_core.adapters.names import (
+    BATTERY_STATE_TOPIC,
+    DOCK_STATUS_TOPIC,
     EXPLORATION_STATUS_TOPIC,
+    HAZARD_DETECTION_TOPIC,
+    KIDNAP_STATUS_TOPIC,
     MAP_SAVER_SERVICE,
     MAP_TOPIC,
     NAVIGATE_TO_POSE_ACTION,
+    UNDOCK_ACTION,
+    namespaced,
 )
 from ros_fakes import FakeRos
 
@@ -29,6 +35,16 @@ SRC = ROOT / "src/hrobot_core/hrobot_core/adapters/exploration_node.py"
 STATUS_SUCCEEDED = 4
 STATUS_ABORTED = 6
 PERIOD_S = 2.0
+NS = "/r2"
+# Códigos de HazardDetection solo para los fakes: el nodo usa los nombres de las constantes.
+HAZARD_CODES = {
+    "BACKUP_LIMIT": 0,
+    "BUMP": 1,
+    "CLIFF": 2,
+    "STUCK": 3,
+    "VIRTUAL_WALL": 4,
+    "OBJECT_PROXIMITY": 5,
+}
 
 
 # --------------------------------------------------------------------------- fakes extra
@@ -140,6 +156,10 @@ class Ext:
         return FakeActionClient.instances[0]
 
     @property
+    def undock_client(self) -> FakeActionClient:
+        return FakeActionClient.instances[1]
+
+    @property
     def saver(self) -> FakeServiceClient:
         return self.clients[0]
 
@@ -240,6 +260,22 @@ def ext(ros_fakes: FakeRos, monkeypatch: pytest.MonkeyPatch) -> Iterator[Ext]:
         TransformListener=lambda b, n: None,
         TransformException=FakeTransformException,
     )
+
+    class UndockAction:
+        class Goal:
+            pass
+
+    hazard_cls = type("HazardDetection", (), HAZARD_CODES)
+    monkeypatch.setattr(ros_fakes.modules["sensor_msgs.msg"], "BatteryState", object, raising=False)
+    mod("irobot_create_msgs.action", Undock=UndockAction)
+    mod(
+        "irobot_create_msgs.msg",
+        DockStatus=object,
+        KidnapStatus=object,
+        HazardDetectionVector=object,
+        HazardDetection=hazard_cls,
+    )
+    mod("irobot_create_msgs")
     mod("nav2_msgs.action", NavigateToPose=SimpleNamespace(Goal=Goal))
     mod("nav2_msgs.srv", SaveMap=SimpleNamespace(Request=SaveRequest))
     mod("nav2_msgs")
@@ -250,9 +286,13 @@ def _mod() -> Any:
     return importlib.import_module("hrobot_core.adapters.exploration_node")
 
 
-def _node(ros: FakeRos, **params: Any) -> Any:
+def _node(ros: FakeRos, robot_status: bool = True, **params: Any) -> Any:
+    """Crea el nodo; por defecto el Create 3 ya publicó "fuera de la base, sin secuestro"."""
     ros.set_params({"min_frontier_size": 1, **params})
-    return _mod().ExplorationNode()
+    node = _mod().ExplorationNode()
+    if robot_status:
+        _robot(ros)
+    return node
 
 
 def _map_msg(unknown_cols: tuple[int, ...] = (0, 10), width: int = 11, yaw_z: float = 0.0) -> Any:
@@ -266,6 +306,17 @@ def _map_msg(unknown_cols: tuple[int, ...] = (0, 10), width: int = 11, yaw_z: fl
     )
     info = SimpleNamespace(width=width, height=3, resolution=1.0, origin=origin)
     return SimpleNamespace(info=info, data=data)
+
+
+def _robot(ros: FakeRos, docked: bool = False, kidnapped: bool = False, pct: float = 0.8) -> None:
+    ros.deliver(namespaced(NS, DOCK_STATUS_TOPIC), SimpleNamespace(is_docked=docked))
+    ros.deliver(namespaced(NS, KIDNAP_STATUS_TOPIC), SimpleNamespace(is_kidnapped=kidnapped))
+    ros.deliver(namespaced(NS, BATTERY_STATE_TOPIC), SimpleNamespace(percentage=pct))
+
+
+def _hazards(ros: FakeRos, *names: str) -> None:
+    detections = [SimpleNamespace(type=HAZARD_CODES[n]) for n in names]
+    ros.deliver(namespaced(NS, HAZARD_DETECTION_TOPIC), SimpleNamespace(detections=detections))
 
 
 def _cycle(ros: FakeRos) -> None:
@@ -311,6 +362,11 @@ def test_parameters_declared_with_defaults(ext: Ext, ros_fakes: FakeRos) -> None
         "no_frontier_confirmations": 3,
         "map_save_name": "map",
         "map_save_timeout_s": 10.0,
+        "create3_namespace": "/r2",
+        "undock_timeout_s": 30.0,
+        "status_timeout_s": 10.0,
+        "kidnap_clear_cycles": 3,
+        "min_battery_pct": 20.0,
         "use_sim_time": False,
     }
     assert isinstance(declared["min_frontier_size"], int)
@@ -329,6 +385,16 @@ def test_parameters_declared_with_defaults(ext: Ext, ros_fakes: FakeRos) -> None
         {"map_save_timeout_s": True},
         {"map_save_name": 3},
         {"map_save_name": "  "},
+        {"create3_namespace": 3},
+        {"create3_namespace": "r 2"},
+        {"undock_timeout_s": 0.0},
+        {"status_timeout_s": float("inf")},
+        {"kidnap_clear_cycles": 0},
+        {"kidnap_clear_cycles": 1.5},
+        {"min_battery_pct": True},
+        {"min_battery_pct": "20"},
+        {"min_battery_pct": 120.0},
+        {"min_battery_pct": float("nan")},
     ],
 )
 def test_invalid_parameters_fail_at_startup(
@@ -347,6 +413,15 @@ def test_node_wiring(ext: Ext, ros_fakes: FakeRos) -> None:
     assert ext.saver.name == MAP_SAVER_SERVICE
     assert set(ext.services) == {"~/start", "~/stop"}
     assert [p.topic for p in ros_fakes.publishers] == [EXPLORATION_STATUS_TOPIC]
+    assert ext.undock_client.name == namespaced(NS, UNDOCK_ACTION)
+    for topic in (
+        DOCK_STATUS_TOPIC,
+        KIDNAP_STATUS_TOPIC,
+        BATTERY_STATE_TOPIC,
+        HAZARD_DETECTION_TOPIC,
+    ):
+        sub = next(s for s in ros_fakes.subscriptions if s.topic == namespaced(NS, topic))
+        assert sub.qos.reliability == "BEST_EFFORT"
     assert ros_fakes.timers[0].period_ns == 2_000_000_000
 
 
@@ -606,6 +681,271 @@ def test_saver_future_error(ext: Ext) -> None:
     saver, client = _saver(ext)
     client.auto = (None, RuntimeError("boom"))
     assert saver.save("m") is False
+
+
+# --------------------------------------------------------------------------- Create 3
+def test_custom_namespace_is_used_for_all_create3_names(ext: Ext, ros_fakes: FakeRos) -> None:
+    _node(ros_fakes, robot_status=False, create3_namespace="robot1/")
+    topics = {s.topic for s in ros_fakes.subscriptions}
+    for name in (
+        DOCK_STATUS_TOPIC,
+        KIDNAP_STATUS_TOPIC,
+        BATTERY_STATE_TOPIC,
+        HAZARD_DETECTION_TOPIC,
+    ):
+        assert namespaced("robot1/", name) in topics
+        assert namespaced(NS, name) not in topics
+    assert ext.undock_client.name == "/robot1/undock"
+
+
+def test_battery_percentage_fraction_is_converted_to_percent(ext: Ext, ros_fakes: FakeRos) -> None:
+    _node(ros_fakes)
+    ext.call("~/start")
+    ros_fakes.deliver(MAP_TOPIC, _map_msg())
+    _robot(ros_fakes, pct=0.19)
+    _cycle(ros_fakes)
+    assert _status(ros_fakes) == "DONE: LOW_BATTERY"
+    assert len(ext.saver.requests) == 1  # mapa parcial guardado
+
+
+def test_battery_above_threshold_and_nan_do_not_abort(ext: Ext, ros_fakes: FakeRos) -> None:
+    _node(ros_fakes)
+    ext.call("~/start")
+    ros_fakes.deliver(MAP_TOPIC, _map_msg())
+    _robot(ros_fakes, pct=0.21)
+    _cycle(ros_fakes)
+    assert _status(ros_fakes) == "EXPLORING"
+    ext.action.futures[0].resolve(FakeHandle())
+    _robot(ros_fakes, pct=float("nan"))
+    _cycle(ros_fakes)
+    assert _status(ros_fakes) == "EXPLORING"
+    assert ext.saver.requests == []
+
+
+@pytest.mark.parametrize("name", ["BUMP", "CLIFF", "STUCK"])
+def test_dangerous_hazards_call_on_hazard_with_current_pose(
+    ext: Ext, ros_fakes: FakeRos, name: str
+) -> None:
+    node = _node(ros_fakes)
+    calls: list[Any] = []
+    node._manager.on_hazard = calls.append
+    _hazards(ros_fakes, "BACKUP_LIMIT", name)
+    assert len(calls) == 1
+    assert (calls[0].x, calls[0].y) == (3.5, 1.5)
+
+
+@pytest.mark.parametrize("name", ["BACKUP_LIMIT", "VIRTUAL_WALL", "OBJECT_PROXIMITY"])
+def test_benign_hazards_are_ignored(ext: Ext, ros_fakes: FakeRos, name: str) -> None:
+    node = _node(ros_fakes)
+    calls: list[Any] = []
+    node._manager.on_hazard = calls.append
+    _hazards(ros_fakes, name)
+    _hazards(ros_fakes)
+    assert calls == []
+
+
+def test_hazard_without_tf_calls_on_hazard_with_none(ext: Ext, ros_fakes: FakeRos) -> None:
+    node = _node(ros_fakes)
+    calls: list[Any] = []
+    node._manager.on_hazard = calls.append
+    ext.tf.pose = None
+    _hazards(ros_fakes, "BUMP")
+    assert calls == [None]
+
+
+def test_hazard_cancels_goal_and_blacklists_contact(ext: Ext, ros_fakes: FakeRos) -> None:
+    _node(ros_fakes)
+    ext.call("~/start")
+    ros_fakes.deliver(MAP_TOPIC, _map_msg())
+    _cycle(ros_fakes)
+    handle = FakeHandle()
+    ext.action.futures[0].resolve(handle)
+    _hazards(ros_fakes, "BUMP")
+    assert handle.cancels == 1
+    handle.result_future.resolve(SimpleNamespace(status=STATUS_ABORTED))  # cancelación tardía
+    assert _status(ros_fakes) == "EXPLORING"
+
+
+def test_docked_start_undocks_then_explores_after_confirmation(
+    ext: Ext, ros_fakes: FakeRos
+) -> None:
+    _node(ros_fakes)
+    _robot(ros_fakes, docked=True)
+    ros_fakes.deliver(MAP_TOPIC, _map_msg())
+    ext.call("~/start")
+    assert len(ext.undock_client.goals) == 1
+    _cycle(ros_fakes)
+    assert ext.action.goals == []
+    assert _status(ros_fakes) == "UNDOCKING"
+    handle = FakeHandle()
+    ext.undock_client.futures[0].resolve(handle)
+    handle.result_future.resolve(SimpleNamespace(status=STATUS_SUCCEEDED))
+    _cycle(ros_fakes)
+    assert ext.action.goals == []  # aún sin docked == False
+    _robot(ros_fakes, docked=False)
+    _cycle(ros_fakes)
+    _cycle(ros_fakes)
+    assert len(ext.action.goals) == 1
+    assert _status(ros_fakes) == "EXPLORING"
+
+
+def test_unknown_dock_does_not_explore_and_times_out(ext: Ext, ros_fakes: FakeRos) -> None:
+    _node(ros_fakes, robot_status=False, status_timeout_s=3.0)
+    ros_fakes.deliver(MAP_TOPIC, _map_msg())
+    ext.call("~/start")
+    _cycle(ros_fakes)
+    assert _status(ros_fakes) == "UNDOCKING"
+    _cycle(ros_fakes)
+    assert _status(ros_fakes) == "FAILED: robot status timeout"
+    assert ext.action.goals == []
+    assert ext.undock_client.goals == []
+
+
+def test_kidnap_pauses_and_resumes_after_clear_cycles(ext: Ext, ros_fakes: FakeRos) -> None:
+    _node(ros_fakes)
+    ext.call("~/start")
+    ros_fakes.deliver(MAP_TOPIC, _map_msg())
+    _cycle(ros_fakes)
+    handle = FakeHandle()
+    ext.action.futures[0].resolve(handle)
+    _robot(ros_fakes, kidnapped=True)
+    _cycle(ros_fakes)
+    assert _status(ros_fakes) == "PAUSED"
+    assert handle.cancels == 1
+    _robot(ros_fakes, kidnapped=False)
+    for _ in range(3):
+        _cycle(ros_fakes)
+    assert _status(ros_fakes) == "EXPLORING"
+
+
+# --------------------------------------------------------------------------- Create3Dock
+def _dock(ext: Ext) -> tuple[Any, list[bool], FakeActionClient]:
+    results: list[bool] = []
+    node = SimpleNamespace(get_logger=lambda: SimpleNamespace(warning=lambda _m: None))
+    client = FakeActionClient(node, None, "x")
+    return _mod().Create3Dock(node, client, results.append), results, client
+
+
+def test_dock_server_not_ready_reports_failure(ext: Ext) -> None:
+    dock, results, client = _dock(ext)
+    client.ready = False
+    dock.undock()
+    assert results == [False]
+    assert client.goals == []
+
+
+def test_dock_rejected_goal_reports_failure(ext: Ext) -> None:
+    dock, results, client = _dock(ext)
+    dock.undock()
+    client.futures[0].resolve(FakeHandle(accepted=False))
+    assert results == [False]
+
+
+def test_dock_send_error_reports_failure(ext: Ext) -> None:
+    dock, results, client = _dock(ext)
+    dock.undock()
+    client.futures[0].resolve(error=RuntimeError("boom"))
+    assert results == [False]
+
+
+def test_dock_result_error_and_status_mapping(ext: Ext) -> None:
+    for status, expected in ((STATUS_SUCCEEDED, True), (STATUS_ABORTED, False)):
+        dock, results, client = _dock(ext)
+        dock.undock()
+        handle = FakeHandle()
+        client.futures[0].resolve(handle)
+        handle.result_future.resolve(SimpleNamespace(status=status))
+        assert results == [expected]
+    dock, results, client = _dock(ext)
+    dock.undock()
+    handle = FakeHandle()
+    client.futures[0].resolve(handle)
+    handle.result_future.resolve(error=RuntimeError("boom"))
+    assert results == [False]
+
+
+def test_stale_robot_status_pauses_and_sends_no_new_goal(ext: Ext, ros_fakes: FakeRos) -> None:
+    _node(ros_fakes, status_timeout_s=3.0)
+    ext.call("~/start")
+    ros_fakes.deliver(MAP_TOPIC, _map_msg())
+    _cycle(ros_fakes)  # dato con 2 s de antigüedad: vigente
+    assert len(ext.action.goals) == 1
+    handle = FakeHandle()
+    ext.action.futures[0].resolve(handle)
+    handle.result_future.resolve(SimpleNamespace(status=STATUS_SUCCEEDED))
+    _cycle(ros_fakes)  # 4 s sin mensajes del Create 3: caducado => desconocido
+    assert _status(ros_fakes) == "PAUSED"
+    _cycle(ros_fakes)
+    assert _status(ros_fakes) == "PAUSED"
+    assert len(ext.action.goals) == 1  # ningún objetivo nuevo
+    for _ in range(3):  # el Create 3 vuelve a publicar: reanuda tras los ciclos limpios
+        _robot(ros_fakes)
+        _cycle(ros_fakes)
+    assert _status(ros_fakes) == "EXPLORING"
+
+
+def test_stale_battery_is_unknown_not_abort(ext: Ext, ros_fakes: FakeRos) -> None:
+    node = _node(ros_fakes, status_timeout_s=3.0)
+    assert node._robot_status().battery_pct == pytest.approx(80.0)
+    ros_fakes.advance(4.0)
+    assert node._robot_status() == _mod().RobotStatus(None, None, None)
+
+
+def test_dock_stop_cancels_undock_and_stale_result_is_discarded(
+    ext: Ext, ros_fakes: FakeRos
+) -> None:
+    _node(ros_fakes)
+    _robot(ros_fakes, docked=True)
+    ext.call("~/start")
+    handle = FakeHandle()
+    ext.undock_client.futures[0].resolve(handle)
+    ext.call("~/stop")
+    assert handle.cancels == 1  # el undock en curso se cancela
+    ext.call("~/start")  # nueva corrida, aún en la base
+    assert len(ext.undock_client.goals) == 2
+    handle.result_future.resolve(SimpleNamespace(status=STATUS_ABORTED))  # resultado obsoleto
+    ros_fakes.deliver(MAP_TOPIC, _map_msg())
+    _cycle(ros_fakes)
+    assert _status(ros_fakes) == "UNDOCKING"
+
+
+def test_dock_cancel_before_response_cancels_late_handle(ext: Ext) -> None:
+    dock, results, client = _dock(ext)
+    dock.undock()
+    dock.cancel()
+    late = FakeHandle()
+    client.futures[0].resolve(late)
+    assert late.cancels == 1
+    assert results == []
+
+
+def test_dock_stale_send_error_and_rejection_are_ignored(ext: Ext) -> None:
+    dock, results, client = _dock(ext)
+    dock.undock()
+    dock.cancel()
+    client.futures[0].resolve(error=RuntimeError("boom"))
+    dock.undock()
+    dock.cancel()
+    client.futures[1].resolve(FakeHandle(accepted=False))
+    dock.cancel()  # sin undock activo: no falla
+    assert results == []
+
+
+def test_node_uses_no_other_create3_actions_nor_velocity_topics() -> None:
+    tree = ast.parse(SRC.read_text(encoding="utf-8"))
+    names = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
+    consts = {
+        n.value for n in ast.walk(tree) if isinstance(n, ast.Constant) and isinstance(n.value, str)
+    }
+    assert not {"CMD_VEL_TOPIC", "NAV_CMD_VEL_TOPIC"} & names
+    for forbidden in (
+        "drive_distance",
+        "drive_arc",
+        "rotate_angle",
+        "wall_follow",
+        "navigate_to_position",
+    ):
+        assert forbidden not in consts
 
 
 # --------------------------------------------------------------------------- main
