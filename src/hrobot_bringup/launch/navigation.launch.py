@@ -15,6 +15,7 @@ from launch.actions import (
     OpaqueFunction,
     SetLaunchConfiguration,
 )
+from launch.conditions import UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
@@ -75,8 +76,15 @@ def _tf_remappings() -> list:
     ]
 
 
-def _nav_node(package: str, executable: str, params: list, remappings: list | None = None) -> Node:
+def _nav_node(
+    package: str,
+    executable: str,
+    params: list,
+    remappings: list | None = None,
+    condition: UnlessCondition | None = None,
+) -> Node:
     return Node(
+        condition=condition,
         package=package,
         executable=executable,
         name=executable,
@@ -86,8 +94,9 @@ def _nav_node(package: str, executable: str, params: list, remappings: list | No
     )
 
 
-def _lifecycle(name: str, params: list) -> Node:
+def _lifecycle(name: str, params: list, condition: UnlessCondition | None = None) -> Node:
     return Node(
+        condition=condition,
         package="nav2_lifecycle_manager",
         executable="lifecycle_manager",
         name=name,
@@ -104,9 +113,13 @@ def generate_launch_description() -> LaunchDescription:
     # Va despues de params_file: sobrescribe odom_topic del YAML con <namespace>/odom.
     odom = {"odom_topic": LaunchConfiguration(ODOM_CONFIG)}
 
+    # use_slam:=true (modo exploracion): slam_toolbox da map->odom; sin AMCL ni map_server
+    # y sin sensors/safety (los lanza mapping.launch.py).
+    not_slam = UnlessCondition(LaunchConfiguration("use_slam"))
     includes = [
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(str(bringup / "launch" / f"{name}.launch.py")),
+            condition=not_slam,
             launch_arguments={
                 "use_sim_time": LaunchConfiguration("use_sim_time"),
                 "create3_namespace": LaunchConfiguration("create3_namespace"),
@@ -119,9 +132,10 @@ def generate_launch_description() -> LaunchDescription:
             "nav2_map_server",
             "map_server",
             [*params, {"yaml_filename": LaunchConfiguration("map")}],
+            condition=not_slam,
         ),
-        _nav_node("nav2_amcl", "amcl", params),
-        _lifecycle("lifecycle_manager_localization", params),
+        _nav_node("nav2_amcl", "amcl", params, condition=not_slam),
+        _lifecycle("lifecycle_manager_localization", params, condition=not_slam),
     ]
     # VERIFY (human): ros2 topic info /cmd_vel -v debe mostrar solo supervisor_node como publisher
     navigation = [
@@ -148,6 +162,7 @@ def generate_launch_description() -> LaunchDescription:
         [
             DeclareLaunchArgument("use_sim_time", default_value="false"),
             DeclareLaunchArgument("map", description="Ruta al .yaml del mapa (obligatorio)"),
+            DeclareLaunchArgument("use_slam", default_value="false"),
             DeclareLaunchArgument("nav_cmd_vel_topic", default_value="/cmd_vel_nav"),
             DeclareLaunchArgument("create3_namespace", default_value="/r2"),
             DeclareLaunchArgument(

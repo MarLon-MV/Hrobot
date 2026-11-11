@@ -66,6 +66,21 @@ ros2 launch hrobot_bringup navigation.launch.py map:=/ruta/al/mapa.yaml
 ros2 launch hrobot_bringup rviz.launch.py
 ```
 
+### Modo exploración (mapear explorando)
+
+> **Advertencia:** no usar en el robot hasta TASK-029 (dock, secuestro, batería, peligros). Antes, solo lanzar sin movimiento y comprobar en RViz que `/map`, TF y costmaps aparecen.
+
+```bash
+ros2 launch hrobot_bringup exploration.launch.py
+# Iniciar / detener la exploración
+ros2 service call /exploration_node/start std_srvs/srv/Trigger
+ros2 service call /exploration_node/stop std_srvs/srv/Trigger
+```
+
+Levanta `mapping.launch.py` (sensores, seguridad, `slam_toolbox`), Nav2 con `navigation.launch.py use_slam:=true` (sin `amcl` ni `map_server`; `slam_toolbox` publica `map -> odom`), `exploration_node` (parámetros en `config/exploration_params.yaml`) y `map_saver_server` con su lifecycle manager. Argumentos: `use_sim_time`, `create3_namespace`, `nav_cmd_vel_topic`, `map_save_path`. Solo `supervisor_node` publica `/cmd_vel`.
+
+El mapa se guarda al terminar en `hrobot_bringup/maps/` (`map.yaml` + imagen; ruta configurable con `map_save_path`).
+
 `ROS_DOMAIN_ID` y el RMW **no** se fijan en los launch: se configuran en el entorno. Offsets del LiDAR respecto a `base_link`: argumentos `laser_x/y/z/yaw` de `sensors.launch.py` (calibración humana).
 
 ## Entorno de red (RPi5, PC con RViz y Create 3)
