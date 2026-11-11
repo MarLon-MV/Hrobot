@@ -11,10 +11,10 @@ Requiere RPi5 (o PC) con ROS 2 Jazzy, y para los últimos puntos el Create 3 y e
 
 ## B. Cadena de velocidad (crítico para seguridad)
 - [ ] `ros2 topic info /cmd_vel -v`: **un único publisher, `supervisor_node`**. Ningún nodo de Nav2.
-- [ ] `ros2 topic info /cmd_vel_nav -v`: publisher = `velocity_smoother`.
-- [ ] Confirmar que `controller_server` publica `cmd_vel` y `velocity_smoother` consume `cmd_vel` / publica `cmd_vel_smoothed` (nombres por defecto asumidos en `navigation.launch.py`).
+- [ ] `ros2 topic info /cmd_vel_nav -v`: publisher = `controller_server`.
+- [ ] Confirmar que `controller_server` publica `cmd_vel` (nombre por defecto asumido en `navigation.launch.py`, remapeado a `nav_cmd_vel_topic`).
 - [ ] `navigation.launch.py ... nav_cmd_vel_topic:=/cmd_vel` debe fallar con error claro.
-- [ ] Nav2 llega a `active` los 4 nodos de navegación + `map_server`/`amcl` (`ros2 lifecycle get ...`). Si `velocity_smoother`, RPP o `bt_navigator` fallan al configurar, anotar el parámetro que falta.
+- [ ] Nav2 llega a `active` los 4 nodos de navegación + `map_server`/`amcl` (`ros2 lifecycle get ...`). Si RPP o `bt_navigator` fallan al configurar, anotar el parámetro que falta.
 - [ ] `bt_navigator` carga `bt_navigate_no_recovery.xml` (no el árbol por defecto) y no pide `behavior_server`.
 
 ## C. Interfaces con el Create 3

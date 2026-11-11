@@ -20,7 +20,6 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
-CONTROLLER_RAW_TOPIC = "cmd_vel_nav_raw"
 BT_XML_NAME = "bt_navigate_no_recovery.xml"
 ODOM_CONFIG = "create3_odom_topic"
 TF_CONFIG = "create3_tf_topic"
@@ -32,7 +31,7 @@ def validate_nav_cmd_vel_topic(topic: str, forbidden: tuple[str, ...] = ("/cmd_v
     """Devuelve el topico normalizado (sin espacios) si es seguro; ValueError si no.
 
     Rechaza vacio, los topicos de `forbidden` (el launch anade /<create3_namespace>/cmd_vel,
-    entrada real del Create 3) y el topico interno controller->smoother (CONTROLLER_RAW_TOPIC).
+    entrada real del Create 3).
     """
     normalized = topic.strip()
     parts = [p for p in normalized.split("/") if p]
@@ -44,11 +43,6 @@ def validate_nav_cmd_vel_topic(topic: str, forbidden: tuple[str, ...] = ("/cmd_v
                 f"nav_cmd_vel_topic '{topic}' resuelve a {banned}: solo supervisor_node "
                 "puede publicar cmd_vel del robot; use /cmd_vel_nav"
             )
-    if parts == [CONTROLLER_RAW_TOPIC]:
-        raise ValueError(
-            f"nav_cmd_vel_topic '{topic}' coincide con el topico interno "
-            f"'{CONTROLLER_RAW_TOPIC}' (entrada del velocity_smoother)"
-        )
     return normalized
 
 
@@ -135,18 +129,9 @@ def generate_launch_description() -> LaunchDescription:
             "nav2_controller",
             "controller_server",
             params,
-            [("cmd_vel", CONTROLLER_RAW_TOPIC)],
+            [("cmd_vel", LaunchConfiguration("nav_cmd_vel_topic"))],
         ),
         _nav_node("nav2_planner", "planner_server", params),
-        _nav_node(
-            "nav2_velocity_smoother",
-            "velocity_smoother",
-            [*params, odom],
-            [
-                ("cmd_vel", CONTROLLER_RAW_TOPIC),
-                ("cmd_vel_smoothed", LaunchConfiguration("nav_cmd_vel_topic")),
-            ],
-        ),
         _nav_node(
             "nav2_bt_navigator",
             "bt_navigator",

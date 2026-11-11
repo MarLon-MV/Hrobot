@@ -196,23 +196,6 @@ map_server:
     use_sim_time: false
     yaml_filename: ""  # el mapa se pasa por launch (TASK-009)
 
-velocity_smoother:
-  ros__parameters:
-    use_sim_time: false
-    odom_topic: /odom  # navigation.launch.py lo sobrescribe con <create3_namespace>/odom
-    smoothing_frequency: 20.0
-    stamp_smoothed_velocity_with_smoothing_time: false
-    scale_velocities: false
-    feedback: "OPEN_LOOP"
-    # [x, y, theta] en m/s, m/s, rad/s
-    max_velocity: [0.3, 0.0, 1.0]
-    min_velocity: [0.0, 0.0, -1.0]  # min_velocity[0] = 0.0 evita marcha atrás
-    max_accel: [2.5, 0.0, 3.2]  # TODO(verify): aceleraciones del Create 3 real
-    max_decel: [-2.5, 0.0, -3.2]  # TODO(verify): deceleraciones del Create 3 real
-    odom_duration: 0.1
-    deadband_velocity: [0.0, 0.0, 0.0]
-    velocity_timeout: 1.0
-
 lifecycle_manager_localization:
   ros__parameters:
     use_sim_time: false
@@ -223,5 +206,5 @@ lifecycle_manager_navigation:
   ros__parameters:
     use_sim_time: false
     autostart: true
-    node_names: ["controller_server", "planner_server", "velocity_smoother", "bt_navigator"]
+    node_names: ["controller_server", "planner_server", "bt_navigator"]
     # Sin behavior_server / smoother_server / waypoint_follower (sin recuperaciones ni marcha atrás).

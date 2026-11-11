@@ -15,7 +15,7 @@ NAV_LAUNCH = BRINGUP / "launch" / "navigation.launch.py"
 PARAMS = BRINGUP / "config" / "nav2_params.yaml"
 SRC = NAV_LAUNCH.read_text(encoding="utf-8")
 TREE = ast.parse(SRC)
-NAV_NODE_NAMES = ["controller_server", "planner_server", "velocity_smoother", "bt_navigator"]
+NAV_NODE_NAMES = ["controller_server", "planner_server", "bt_navigator"]
 
 
 def _strings() -> list[str]:
@@ -124,12 +124,9 @@ def _remaps_by_node() -> dict[str, list[tuple[str, str]]]:
 
 
 def test_velocity_chain_remaps() -> None:
-    raw = _module_constants()["CONTROLLER_RAW_TOPIC"]
     remaps = _remaps_by_node()
-    assert remaps["controller_server"] == [("cmd_vel", raw)]
-    assert sorted(remaps["velocity_smoother"]) == sorted(
-        [("cmd_vel", raw), ("cmd_vel_smoothed", "<LC:nav_cmd_vel_topic>")]
-    )
+    assert remaps["controller_server"] == [("cmd_vel", "<LC:nav_cmd_vel_topic>")]
+    assert "velocity_smoother" not in remaps
     for name in ("planner_server", "bt_navigator", "map_server", "amcl"):
         assert remaps.get(name, []) == []
 
@@ -139,7 +136,6 @@ def test_no_remap_targets_cmd_vel() -> None:
     assert all_pairs
     for _src, dst in all_pairs:
         assert dst.strip("/") != "cmd_vel"
-    assert _module_constants()["CONTROLLER_RAW_TOPIC"].strip("/") != "cmd_vel"
 
 
 def test_check_topic_wired_before_nodes() -> None:
@@ -192,7 +188,6 @@ EXPECTED_NODES = {
     "amcl": ("_nav_node", "nav2_amcl"),
     "controller_server": ("_nav_node", "nav2_controller"),
     "planner_server": ("_nav_node", "nav2_planner"),
-    "velocity_smoother": ("_nav_node", "nav2_velocity_smoother"),
     "bt_navigator": ("_nav_node", "nav2_bt_navigator"),
     "lifecycle_manager_localization": ("_lifecycle", None),
     "lifecycle_manager_navigation": ("_lifecycle", None),
@@ -438,13 +433,12 @@ def test_create3_namespace_declared_default_r2() -> None:
 def test_odom_override_after_params_file() -> None:
     gen_src = ast.get_source_segment(SRC, _gen_func()) or ""
     assert 'odom = {"odom_topic": LaunchConfiguration(ODOM_CONFIG)}' in gen_src
-    for key in ("velocity_smoother", "bt_navigator"):
-        call = next(c for c in _node_calls() if _call_key(c) == key)
-        assert isinstance(call.args[2], ast.List)
-        elts = call.args[2].elts
-        shared = next(i for i, e in enumerate(elts) if isinstance(e, ast.Starred))
-        odom = next(i for i, e in enumerate(elts) if isinstance(e, ast.Name) and e.id == "odom")
-        assert shared < odom
+    call = next(c for c in _node_calls() if _call_key(c) == "bt_navigator")
+    assert isinstance(call.args[2], ast.List)
+    elts = call.args[2].elts
+    shared = next(i for i, e in enumerate(elts) if isinstance(e, ast.Starred))
+    odom = next(i for i, e in enumerate(elts) if isinstance(e, ast.Name) and e.id == "odom")
+    assert shared < odom
     assert 'namespaced(namespace, "/odom")' in SRC
 
 
@@ -525,11 +519,19 @@ def test_validator_returns_normalized(raw: str, expected: str) -> None:
         "  ",
         "/",
         " /cmd_vel",
-        "cmd_vel_nav_raw",
-        "/cmd_vel_nav_raw",
-        " /cmd_vel_nav_raw ",
     ],
 )
 def test_validator_rejects(topic: str) -> None:
     with pytest.raises(ValueError):
         _load_validator()(topic)
+
+
+def test_no_velocity_smoother_references() -> None:
+    for frag in ("velocity_smoother", "cmd_vel_smoothed", "CONTROLLER_RAW_TOPIC"):
+        assert frag not in SRC
+
+
+@pytest.mark.parametrize("topic", ["/cmd_vel", "/r2/cmd_vel"])
+def test_validator_still_rejects_robot_cmd_vel(topic: str) -> None:
+    with pytest.raises(ValueError):
+        _load_validator()(topic, forbidden=("/cmd_vel", "/r2/cmd_vel"))

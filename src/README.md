@@ -25,7 +25,7 @@ Robot móvil autónomo (AMR) para reparto de medicación en hospital: **iRobot C
 ```
 LD19 (UART 230400) → ld19_node → /scan ─┬─→ AMCL / slam_toolbox / costmaps (Nav2)
                                          └─→ supervisor_node
-Nav2 (controller → velocity_smoother) → /cmd_vel_nav → supervisor_node → /cmd_vel → Create 3
+Nav2 (controller_server) → /cmd_vel_nav → supervisor_node → /cmd_vel → Create 3
 /hrobot/mission_status (estado de misión) ────────────→ supervisor_node
 ```
 
@@ -39,7 +39,7 @@ Reglas que no se rompen:
 
 | Archivo | Para qué |
 |---|---|
-| `config/nav2_params.yaml` | Parámetros de Nav2 (AMCL, Regulated Pure Pursuit, costmaps, velocity_smoother). Muchos valores llevan `# TODO(verify)`. |
+| `config/nav2_params.yaml` | Parámetros de Nav2 (AMCL, Regulated Pure Pursuit, costmaps). Muchos valores llevan `# TODO(verify)`. |
 | `config/slam_toolbox_params.yaml` | Mapeo online asíncrono. |
 | `config/bt_navigate_no_recovery.xml` | Árbol de comportamiento sin recuperaciones; lo inyecta `navigation.launch.py`. |
 | `rviz/hrobot_nav.rviz` | Vista de supervisión (TF, scan, mapa, costmaps, partículas AMCL, planes). |

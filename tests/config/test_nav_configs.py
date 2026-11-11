@@ -116,13 +116,6 @@ def _check_velocity(nav2: Config, fp: dict[str, Any]) -> list[str]:
         errors.append("use_collision_detection debe ser true")
     if fp["allow_reversing"] is not False:
         errors.append("allow_reversing debe ser false (sin marcha atrás)")
-    smoother = _get(nav2, "velocity_smoother", "ros__parameters", "max_velocity")
-    if not (isinstance(smoother, list) and smoother and _is_num(smoother[0])):
-        errors.append(f"velocity_smoother.max_velocity inválido: {smoother!r}")
-    elif not 0.0 < smoother[0] <= MAX_LINEAR_VEL:
-        errors.append(
-            f"velocity_smoother.max_velocity[0] = {smoother[0]!r} excede {MAX_LINEAR_VEL}"
-        )
     return errors
 
 
@@ -156,39 +149,10 @@ def _check_misc(nav2: Config, slam: Config) -> list[str]:
     return errors
 
 
-def _check_smoother(nav2: Config) -> list[str]:
-    errors: list[str] = []
-    sm = _get(nav2, "velocity_smoother", "ros__parameters")
-    if not isinstance(sm, dict):
-        return ["velocity_smoother: falta ros__parameters"]
-    vmax, vmin = sm.get("max_velocity"), sm.get("min_velocity")
-    if not (isinstance(vmin, list) and len(vmin) == 3 and all(_is_num(v) for v in vmin)):
-        errors.append(f"velocity_smoother.min_velocity inválido: {vmin!r}")
-    else:
-        if vmin[0] != 0.0:
-            errors.append(f"velocity_smoother.min_velocity[0] = {vmin[0]!r}, se esperaba 0.0")
-        if vmin[1] != 0.0:
-            errors.append(f"velocity_smoother.min_velocity[1] = {vmin[1]!r}, se esperaba 0.0")
-    if isinstance(vmax, list) and len(vmax) == 3 and all(_is_num(v) for v in vmax):
-        if vmax[1] != 0.0:
-            errors.append(f"velocity_smoother.max_velocity[1] = {vmax[1]!r}, se esperaba 0.0")
-    else:
-        errors.append(f"velocity_smoother.max_velocity inválido: {vmax!r}")
-    for key in ("max_accel", "max_decel"):
-        val = sm.get(key)
-        if not (isinstance(val, list) and len(val) == 3 and all(_is_num(v) for v in val)):
-            errors.append(f"velocity_smoother.{key} ausente o no numérico: {val!r}")
-    decel = sm.get("max_decel")
-    if isinstance(decel, list) and decel and _is_num(decel[0]) and decel[0] >= 0.0:
-        errors.append(f"velocity_smoother.max_decel[0] = {decel[0]!r} debe ser negativa")
-    freq = sm.get("smoothing_frequency")
-    if not _is_num(freq) or freq <= 0.0:
-        errors.append(f"velocity_smoother.smoothing_frequency inválida: {freq!r}")
-    if sm.get("feedback") not in ("OPEN_LOOP", "CLOSED_LOOP"):
-        errors.append(f"velocity_smoother.feedback inválido: {sm.get('feedback')!r}")
-    if sm.get("odom_topic") != "/odom":
-        errors.append(f"velocity_smoother.odom_topic = {sm.get('odom_topic')!r}, se esperaba /odom")
-    return errors
+def _check_no_smoother(nav2: Config) -> list[str]:
+    if "velocity_smoother" in nav2:
+        return ["velocity_smoother: sección eliminada en TASK-025, no debe existir"]
+    return []
 
 
 def _check_controller(nav2: Config) -> list[str]:
@@ -201,7 +165,7 @@ def _check_controller(nav2: Config) -> list[str]:
     return errors
 
 
-NAV_NODES = ["controller_server", "planner_server", "velocity_smoother", "bt_navigator"]
+NAV_NODES = ["controller_server", "planner_server", "bt_navigator"]
 
 
 def _check_lifecycle(nav2: Config) -> list[str]:
@@ -242,7 +206,7 @@ def _check_strings(nav2: Config) -> list[str]:
 
 def _check_nav_extra(nav2: Config) -> list[str]:
     return (
-        _check_smoother(nav2)
+        _check_no_smoother(nav2)
         + _check_controller(nav2)
         + _check_lifecycle(nav2)
         + _check_strings(nav2)
@@ -297,7 +261,6 @@ def test_real_files_have_ros_parameters(nav2: Config, slam: Config) -> None:
         assert _get(nav2, node, "ros__parameters") is not None, node
     assert _get(nav2, *LC) is not None
     assert _get(nav2, *GC) is not None
-    assert _get(nav2, "velocity_smoother", "ros__parameters") is not None
     assert _get(slam, "slam_toolbox", "ros__parameters") is not None
 
 
@@ -350,12 +313,21 @@ def test_velocity_limits(nav2: Config) -> None:
     assert 0.0 < fp["rotate_to_heading_angular_vel"] <= 1.0
     assert fp["use_collision_detection"] is True
     assert fp["allow_reversing"] is False
-    smoother_max = _get(nav2, "velocity_smoother", "ros__parameters", "max_velocity")
-    assert fp["rotate_to_heading_angular_vel"] <= smoother_max[2]
 
 
-def test_velocity_smoother_cap(nav2: Config) -> None:
-    assert _get(nav2, "velocity_smoother", "ros__parameters", "max_velocity")[0] <= 0.3
+def test_no_velocity_smoother_section(nav2: Config) -> None:
+    assert "velocity_smoother" not in nav2
+    assert "velocity_smoother" not in (CONFIG_DIR / "nav2_params.yaml").read_text(encoding="utf-8")
+
+
+def test_followpath_linear_cap_matches_supervisor(nav2: Config) -> None:
+    assert _get(nav2, *FP, "desired_linear_vel") <= 0.3
+
+
+def test_neg_smoother_section_reintroduced(nav2: Config, slam: Config) -> None:
+    n = copy.deepcopy(nav2)
+    n["velocity_smoother"] = {"ros__parameters": {}}
+    assert any("velocity_smoother" in e for e in validate(n, slam))
 
 
 def test_loop_closing_enabled(slam: Config) -> None:
@@ -445,65 +417,8 @@ def test_neg_sim_time_true(nav2: Config, slam: Config) -> None:
     assert any("use_sim_time" in e for e in errs)
 
 
-VS = ("velocity_smoother", "ros__parameters")
-
-
 def _errs(nav2: Config, slam: Config, path: tuple[str, ...], value: Any) -> list[str]:
     return _validate_mutated(nav2, slam, "nav2", path, value)
-
-
-def test_smoother_real_values(nav2: Config) -> None:
-    sm = _get(nav2, *VS)
-    assert sm["min_velocity"][0] == 0.0
-    assert sm["min_velocity"][1] == 0.0
-    assert sm["max_velocity"][1] == 0.0
-    assert sm["max_velocity"][0] <= 0.3
-    assert sm["max_decel"][0] < 0.0
-    assert sm["feedback"] == "OPEN_LOOP"
-    assert sm["odom_topic"] == "/odom"
-    for key in ("max_accel", "max_decel"):
-        assert all(_is_num(v) for v in sm[key])
-    assert _is_num(sm["smoothing_frequency"])
-
-
-def test_neg_smoother_min_velocity_negative(nav2: Config, slam: Config) -> None:
-    errs = _errs(nav2, slam, (*VS, "min_velocity"), [-0.1, 0.0, -1.0])
-    assert any("min_velocity[0]" in e for e in errs)
-
-
-def test_neg_smoother_min_velocity_lateral(nav2: Config, slam: Config) -> None:
-    errs = _errs(nav2, slam, (*VS, "min_velocity"), [0.0, -0.1, -1.0])
-    assert any("min_velocity[1]" in e for e in errs)
-
-
-def test_neg_smoother_max_velocity_lateral(nav2: Config, slam: Config) -> None:
-    errs = _errs(nav2, slam, (*VS, "max_velocity"), [0.3, 0.1, 1.0])
-    assert any("max_velocity[1]" in e for e in errs)
-
-
-def test_neg_smoother_max_velocity_too_high(nav2: Config, slam: Config) -> None:
-    errs = _errs(nav2, slam, (*VS, "max_velocity"), [0.5, 0.0, 1.0])
-    assert any("max_velocity[0]" in e for e in errs)
-
-
-@pytest.mark.parametrize("key", ["max_accel", "max_decel"])
-def test_neg_smoother_accel_non_numeric(nav2: Config, slam: Config, key: str) -> None:
-    errs = _errs(nav2, slam, (*VS, key), ["a", 0.0, 1.0])
-    assert any(key in e for e in errs)
-
-
-def test_neg_smoother_decel_positive(nav2: Config, slam: Config) -> None:
-    errs = _errs(nav2, slam, (*VS, "max_decel"), [2.5, 0.0, -3.2])
-    assert any("max_decel[0]" in e for e in errs)
-
-
-def test_neg_smoother_frequency_missing(nav2: Config, slam: Config) -> None:
-    errs = _errs(nav2, slam, (*VS, "smoothing_frequency"), None)
-    assert any("smoothing_frequency" in e for e in errs)
-
-
-def test_neg_smoother_feedback_invalid(nav2: Config, slam: Config) -> None:
-    assert any("feedback" in e for e in _errs(nav2, slam, (*VS, "feedback"), "x"))
 
 
 def test_yaml_has_no_dwb(nav2: Config) -> None:
@@ -532,7 +447,7 @@ def test_neg_lifecycle_missing_section(nav2: Config, slam: Config) -> None:
 
 
 def test_neg_cmd_vel_absolute(nav2: Config, slam: Config) -> None:
-    errs = _errs(nav2, slam, (*VS, "cmd_vel_topic"), "/cmd_vel")
+    errs = _errs(nav2, slam, (*FP, "cmd_vel_topic"), "/cmd_vel")
     assert any("/cmd_vel" in e for e in errs)
 
 
