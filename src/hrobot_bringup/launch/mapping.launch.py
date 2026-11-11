@@ -36,6 +36,7 @@ def generate_launch_description() -> LaunchDescription:
         "use_sim_time": use_sim_time,
         "create3_namespace": LaunchConfiguration("create3_namespace"),
     }
+    safety_args = {**common_args, "require_mission_status": LaunchConfiguration("require_mission_status")}
 
     sensors = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(str(bringup / "launch" / "sensors.launch.py")),
@@ -43,7 +44,7 @@ def generate_launch_description() -> LaunchDescription:
     )
     safety = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(str(bringup / "launch" / "safety.launch.py")),
-        launch_arguments=common_args.items(),
+        launch_arguments=safety_args.items(),
     )
     slam_toolbox = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(str(slam / "launch" / "online_async_launch.py")),
@@ -64,6 +65,7 @@ def generate_launch_description() -> LaunchDescription:
         [
             DeclareLaunchArgument("use_sim_time", default_value="false"),
             DeclareLaunchArgument("create3_namespace", default_value="/r2"),
+            DeclareLaunchArgument("require_mission_status", default_value="true"),
             OpaqueFunction(function=_set_tf_topics),
             sensors,
             safety,

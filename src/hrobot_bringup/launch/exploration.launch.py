@@ -54,7 +54,12 @@ def generate_launch_description() -> LaunchDescription:
 
     mapping = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(str(bringup / "launch" / "mapping.launch.py")),
-        launch_arguments=common_args.items(),
+        # exploration_node no publica MissionStatus: sin esto el supervisor frena siempre
+        # (NO_MISSION_STATUS). Siguen activas las reglas de scan, distancia y emergencia.
+        launch_arguments={
+            **common_args,
+            "require_mission_status": LaunchConfiguration("require_mission_status"),
+        }.items(),
     )
     navigation = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(str(bringup / "launch" / "navigation.launch.py")),
@@ -95,6 +100,7 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument("use_sim_time", default_value="false"),
             DeclareLaunchArgument("create3_namespace", default_value="/r2"),
             DeclareLaunchArgument("nav_cmd_vel_topic", default_value="/cmd_vel_nav"),
+            DeclareLaunchArgument("require_mission_status", default_value="false"),
             DeclareLaunchArgument(
                 "map_save_path", default_value=str(bringup / "maps" / MAP_SAVE_NAME)
             ),
