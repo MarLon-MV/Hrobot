@@ -119,10 +119,14 @@ planner_server:
     costmap_update_timeout: 1.0
     planner_plugins: ["GridBased"]
     GridBased:
-      plugin: "nav2_navfn_planner::NavfnPlanner"
+      # Jazzy en el robot solo trae nav2_smac_planner (no navfn).
+      plugin: "nav2_smac_planner::SmacPlanner2D"
       tolerance: 0.5  # TODO(verify)
-      use_astar: false
       allow_unknown: true  # TODO(verify)
+      downsample_costmap: false
+      max_iterations: 1000000
+      max_on_approach_iterations: 1000
+      cost_travel_multiplier: 2.0
 
 local_costmap:
   local_costmap:
