@@ -40,4 +40,4 @@ colcon test --packages-select <paquete> && colcon test-result --verbose
 Archivos `tasks/{backlog,in_progress,done}/T-XX.md`: backlog = por hacer, in_progress = en trabajo, done = terminadas. Solo el Orquestador las mueve (`git mv`).
 
 ## Flujo multi-agente
-Ver `.agents/orchestrator.md`, `.agents/coder.md`, `.agents/reviewer.md`.
+Ver `.claude/.agents/orchestrator.md`, `.claude/.agents/coder.md`, `.claude/.agents/reviewer.md`.
