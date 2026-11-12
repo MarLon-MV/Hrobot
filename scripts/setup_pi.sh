@@ -7,11 +7,13 @@
 # Qué hace:
 #   1. Instala herramientas base (git, colcon, rosdep).
 #   2. Inicializa/actualiza rosdep.
-#   3. Clona (o actualiza) el driver del LD19 en src/ldlidar_stl_ros2 (rosdep no lo resuelve).
+#   3. Driver del LD19 (rosdep no lo resuelve): si ya hay un `ldlidar_stl_ros2` disponible en el entorno
+#      (otro workspace ya compilado y cargado), lo reutiliza; si no, lo clona en src/ldlidar_stl_ros2.
 #   4. Permisos del puerto serie: grupo dialout + regla udev con symlink /dev/ldlidar.
 #   5. Instala dependencias con rosdep y compila con colcon.
 #
-# Uso:  scripts/setup_pi.sh [--skip-udev] [--skip-build]
+# Uso:  scripts/setup_pi.sh [--skip-udev] [--skip-build] [--force-driver]
+#   --force-driver  clona y compila el driver aquí aunque ya exista uno en el entorno
 # Variables opcionales:
 #   LDLIDAR_REPO   repositorio del driver   (def: repo oficial de LDRobot)
 #   LDLIDAR_REF    rama, tag o commit       (def: master; fíjalo a un commit cuando el build funcione)
@@ -30,10 +32,12 @@ UDEV_CONTENT='SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60
 
 SKIP_UDEV=0
 SKIP_BUILD=0
+FORCE_DRIVER=0
 for arg in "$@"; do
   case "$arg" in
     --skip-udev) SKIP_UDEV=1 ;;
     --skip-build) SKIP_BUILD=1 ;;
+    --force-driver) FORCE_DRIVER=1 ;;
     -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
     *) echo "Argumento desconocido: $arg (usa --help)" >&2; exit 2 ;;
   esac
@@ -59,19 +63,39 @@ if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then
 fi
 rosdep update --rosdistro "${ROS_DISTRO_NAME}"
 
-log "Driver del LD19 (${LDLIDAR_REPO} @ ${LDLIDAR_REF})"
+# setup.bash de ROS usa variables sin definir: desactivar -u mientras se carga.
+set +u
+# shellcheck disable=SC1090
+source "/opt/ros/${ROS_DISTRO_NAME}/setup.bash"
+set -u
+
 LD_DIR="src/ldlidar_stl_ros2"
-if [ -d "${LD_DIR}/.git" ]; then
-  git -C "${LD_DIR}" fetch --tags origin
+USE_EXISTING_DRIVER=0
+if [ "${FORCE_DRIVER}" -eq 0 ]; then
+  if existing_prefix="$(ros2 pkg prefix ldlidar_stl_ros2 2>/dev/null)"; then
+    case "${existing_prefix}" in
+      "${REPO_ROOT}"/install/*) ;;  # es el de este workspace: tratarlo como propio
+      *) USE_EXISTING_DRIVER=1 ;;
+    esac
+  fi
+fi
+
+if [ "${USE_EXISTING_DRIVER}" -eq 1 ]; then
+  log "Driver del LD19 ya disponible en ${existing_prefix}: se reutiliza (usa --force-driver para compilarlo aquí)"
 else
-  git clone "${LDLIDAR_REPO}" "${LD_DIR}"
+  log "Driver del LD19 (${LDLIDAR_REPO} @ ${LDLIDAR_REF})"
+  if [ -d "${LD_DIR}/.git" ]; then
+    git -C "${LD_DIR}" fetch --tags origin
+  else
+    git clone "${LDLIDAR_REPO}" "${LD_DIR}"
+  fi
+  git -C "${LD_DIR}" checkout "${LDLIDAR_REF}"
+  # Si LDLIDAR_REF es una rama, avanzar a su última versión (sin merges); si es tag/commit no hace nada.
+  if git -C "${LD_DIR}" symbolic-ref -q HEAD >/dev/null; then
+    git -C "${LD_DIR}" merge --ff-only "origin/${LDLIDAR_REF}"
+  fi
+  echo "Driver en commit: $(git -C "${LD_DIR}" rev-parse --short HEAD)"
 fi
-git -C "${LD_DIR}" checkout "${LDLIDAR_REF}"
-# Si LDLIDAR_REF es una rama, avanzar a su última versión (sin merges); si es tag/commit no hace nada.
-if git -C "${LD_DIR}" symbolic-ref -q HEAD >/dev/null; then
-  git -C "${LD_DIR}" merge --ff-only "origin/${LDLIDAR_REF}"
-fi
-echo "Driver en commit: $(git -C "${LD_DIR}" rev-parse --short HEAD)"
 
 if [ "${SKIP_UDEV}" -eq 0 ]; then
   log "Permisos del puerto serie (dialout + udev /dev/ldlidar)"
@@ -90,16 +114,19 @@ else
 fi
 
 log "Instalando dependencias con rosdep"
-# setup.bash de ROS usa variables sin definir: desactivar -u mientras se carga.
-set +u
-# shellcheck disable=SC1090
-source "/opt/ros/${ROS_DISTRO_NAME}/setup.bash"
-set -u
 rosdep install --from-paths src --ignore-src -y --rosdistro "${ROS_DISTRO_NAME}"
 
 if [ "${SKIP_BUILD}" -eq 0 ]; then
   log "Compilando con colcon (workers: ${JOBS})"
-  colcon build --symlink-install --parallel-workers "${JOBS}"
+  build_args=(--symlink-install --parallel-workers "${JOBS}")
+  if [ "${USE_EXISTING_DRIVER}" -eq 1 ]; then
+    # Evita recompilar/sobrescribir el driver del otro workspace si también hay copia en src/.
+    [ -d "${LD_DIR}" ] && build_args+=(--packages-skip ldlidar_stl_ros2)
+  else
+    # El driver no incluye <pthread.h> y falla con el GCC de Ubuntu 24.04 (pthread_mutex_* sin declarar).
+    build_args+=(--cmake-args "-DCMAKE_CXX_FLAGS=-include pthread.h")
+  fi
+  colcon build "${build_args[@]}"
 else
   log "Omitiendo compilación (--skip-build)"
 fi

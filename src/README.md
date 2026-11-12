@@ -69,7 +69,10 @@ Más detalle en [`scripts/setup_pi.sh`](../scripts/setup_pi.sh).
 Qué hace el script:
 
 1. Instala `git`, `colcon` y `rosdep`, e inicializa `rosdep`.
-2. Clona o actualiza el driver oficial del LD19 en `src/ldlidar_stl_ros2` (ignorado por git).
+2. Driver del LD19: si ya hay un `ldlidar_stl_ros2` en el entorno (otro workspace compilado y cargado),
+   lo **reutiliza** y excluye la copia de `src/` del build (`--force-driver` para compilarlo aquí). Si no,
+   clona el repo oficial en `src/ldlidar_stl_ros2` (ignorado por git) y lo compila con
+   `-include pthread.h`, porque el driver no incluye esa cabecera y falla con el GCC de Ubuntu 24.04.
 3. Añade tu usuario al grupo `dialout` e instala una regla udev (CP2102, `10c4:ea60`) que crea
    el symlink `/dev/ldlidar`. Tras la primera vez, cierra sesión y vuelve a entrar.
 4. Ejecuta `rosdep install` (sin `-r`: se detiene si falta una dependencia) y `colcon build --symlink-install`.
