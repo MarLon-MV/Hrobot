@@ -71,9 +71,9 @@ MapManagerNode::MapManagerNode(const rclcpp::NodeOptions & options)
 {
   const std::string maps_dir = declare_parameter<std::string>("maps_dir", "~/.create3_maps");
   const std::string saver_service =
-    declare_parameter<std::string>("map_saver_service", "/map_saver/save_map");
+    declare_parameter<std::string>("map_saver_service", "map_saver/save_map");
   const std::string serialize_service =
-    declare_parameter<std::string>("serialize_service", "/slam_toolbox/serialize_map");
+    declare_parameter<std::string>("serialize_service", "slam_toolbox/serialize_map");
   double timeout_sec = declare_parameter<double>("service_timeout_sec", 5.0);
   const double occupied = declare_parameter<double>("occupied_thresh", 0.65);
   const double free_thresh = declare_parameter<double>("free_thresh", 0.25);

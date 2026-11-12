@@ -19,7 +19,7 @@ slam_toolbox:
     odom_frame: odom
     map_frame: map
     base_frame: base_link
-    scan_topic: /scan
+    scan_topic: scan          # relative: /<ns>/scan
     mode: mapping            # mapping (not localization): the robot keeps extending the map
 
     debug_logging: false

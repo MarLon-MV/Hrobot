@@ -6,22 +6,55 @@ Solo `config/` y `launch/` (sin nodos propios) para el robot Create 3 + RPi5 + L
 
 ```bash
 ros2 launch create3_bot_bringup master_explore.launch.py
-# Argumentos: use_sim_time:=false  rviz:=true|false  maps_dir:=~/.create3_maps  map:=<nombre>
-#             slam_lifecycle:=true|false  (lifecycle de slam_toolbox, ver Supuestos)
+# Argumentos: robot_namespace:=r2  use_sim_time:=false  rviz:=true|false  maps_dir:=~/.create3_maps
+#             map:=<nombre>  slam_lifecycle:=true|false  lidar_port:=/dev/ttyUSB0  lidar_baudrate:=230400
+ros2 launch create3_bot_bringup master_explore.launch.py robot_namespace:=r3   # otro robot
+ros2 launch create3_bot_bringup master_explore.launch.py robot_namespace:=''   # sin namespace (simulacion)
 ```
+
+## Namespace del robot
+
+El Create 3 usa el namespace `/r2` (`/r2/odom`, `/r2/tf`, `/r2/tf_static`, `/r2/cmd_vel`) y todo el stack
+cuelga de el. `robot_namespace` (en los tres launch) vale por defecto `$CREATE3_ROBOT_NAMESPACE` si esta
+definida y, si no, `r2`; vacio = sin namespace. `scripts/set_robot.sh r3` (o `--show`, `--check`, `--unset`)
+guarda la variable para todas las terminales; **no cambia el namespace del Create 3** (interfaz web >
+Application > ROS 2).
+
+Diseno (el namespace se aplica **una sola vez**, nunca `/r2/r2/...`):
+`hardware_base` y `navigation` aplican `PushRosNamespace` a sus propios nodos; `master_explore` lo aplica
+solo a los suyos (slam_toolbox, `map_manager_node`, `explorer_node`, `rviz2`) y los `include` quedan fuera de
+ese grupo, recibiendo `robot_namespace`. Ayudantes comunes en `launch/create3_namespace.py`.
+
+- **TF**: remapeo `/tf -> tf` y `/tf_static -> tf_static` en cada nodo con TF (robot_state_publisher, Nav2,
+  slam_toolbox, rviz2), asi leen/publican `/r2/tf` y `/r2/tf_static`. En `explorer_node` el destino es absoluto
+  (`/tf:=/r2/tf`) porque su `tf2_ros::TransformListener` crea un nodo interno en el namespace raiz que solo ve
+  remapeos globales. Los `frame_id` no llevan prefijo.
+- **YAML**: con namespace se reescriben al arrancar con `nav2_common` `RewrittenYaml(root_key=<ns>)`
+  (nav2, slam, explorer); sin namespace se usan tal cual. Todos los topics/servicios de los YAML son relativos.
+- **RViz**: `exploration.rviz` usa `/<robot_namespace>/...`; `ReplaceString` lo sustituye por `/r2/...` o,
+  sin namespace, por `/...` (sin barra doble).
+
+| Nombre | `robot_namespace:=r2` | `robot_namespace:=''` |
+|---|---|---|
+| LiDAR / mapa / fronteras | `/r2/scan`, `/r2/map`, `/r2/frontiers` | `/scan`, `/map`, `/frontiers` |
+| Create 3 | `/r2/odom`, `/r2/cmd_vel`, `/r2/tf`, `/r2/tf_static` | `/odom`, `/cmd_vel`, `/tf`, `/tf_static` |
+| Exploracion | `/r2/explore_map`, `/r2/save_exploration_map` | `/explore_map`, `/save_exploration_map` |
+| Nav2 | `/r2/navigate_to_pose`, `/r2/map_saver/save_map` | `/navigate_to_pose`, `/map_saver/save_map` |
+| slam_toolbox | `/r2/slam_toolbox/serialize_map` | `/slam_toolbox/serialize_map` |
+| Nodos | `/r2/explorer_node`, `/r2/slam_toolbox`, ... | `/explorer_node`, `/slam_toolbox`, ... |
 
 Lanza: `robot_state_publisher` (xacro de `create3_bot_description`) + driver LD19 (`hardware_base`),
 Nav2 sin amcl/map_server + `map_saver_server` (`navigation`), `slam_toolbox` (`async_slam_toolbox_node`),
 `explorer_node`, `map_manager_node` y `rviz2` con `create3_bot_description/rviz/exploration.rviz`.
 Launch individuales: `hardware_base.launch.py` (`lidar_port`, `lidar_baudrate`) y
-`navigation.launch.py` (`params_file`, `autostart`).
+`navigation.launch.py` (`params_file`, `autostart`); ambos aceptan `robot_namespace`.
 
 ## Disparar la exploracion
 
-La accion se llama `explore_map` (relativa al nodo; `/explore_map` sin namespace):
+La accion se llama `explore_map` (relativa al namespace: `/r2/explore_map`; `/explore_map` sin namespace):
 
 ```bash
-ros2 action send_goal /explore_map create3_bot_interfaces/action/ExploreMap \
+ros2 action send_goal /r2/explore_map create3_bot_interfaces/action/ExploreMap \
   "{start_exploration: true, max_duration_sec: 0.0}" --feedback
 ```
 
@@ -31,7 +64,7 @@ ros2 action send_goal /explore_map create3_bot_interfaces/action/ExploreMap \
 ## Guardar un mapa
 
 ```bash
-ros2 service call /save_exploration_map create3_bot_interfaces/srv/SaveExplorationMap "{map_name: sala1}"
+ros2 service call /r2/save_exploration_map create3_bot_interfaces/srv/SaveExplorationMap "{map_name: sala1}"
 ```
 
 Genera en `maps_dir`: `sala1.yaml/.pgm` (map_saver) y `sala1.posegraph/.data` (slam_toolbox).
@@ -64,12 +97,14 @@ arranca en el dock/pose de origen del mapa; si no, hay que usar `map_start_pose`
 - **Puerto serie**: por defecto `/dev/ttyUSB0`, 230400 baudios (confirmar; crear regla udev y permisos
   `dialout`). `angle_crop_*` desactivado; `laser_scan_dir` puede requerir invertirse segun el montaje.
 - **Create 3**: no se lanza aqui. Se conecta por red; debe compartir `ROS_DOMAIN_ID` y RMW con la RPi5.
-  Se asume SIN namespace: `/odom`, `/cmd_vel` y TF `odom -> base_link` publicados por el Create 3. Con
-  namespace hay que remapear `cmd_vel`, `odom` y `tf`.
+  Se asume el namespace `r2` (o el de `robot_namespace`): `/r2/odom`, `/r2/cmd_vel` y TF `odom -> base_link`
+  en `/r2/tf`, publicados por el Create 3. Sin verificar contra el robot real.
 - **TF**: `laser_frame` cuelga de `base_link` con `laser_z: 0.12` m (xacro, ajustable); medir la altura/offset
   reales. `odom -> base_link` lo da el Create 3, `map -> odom` slam_toolbox.
 - **slam_toolbox lifecycle**: en Jazzy `async_slam_toolbox_node` es un nodo lifecycle; el launch hace
   configure+activate. Si la version instalada no lo es, usar `slam_lifecycle:=false`.
 - **Nav2 Jazzy**: parametros escritos de memoria (sin `nav2_bringup` instalado); revisar al primer arranque
-  los logs de `controller_server`/`bt_navigator`. Sin `velocity_smoother`: `/cmd_vel` directo.
-- La QoS de `/scan` del driver (best effort vs reliable) debe ser compatible con slam_toolbox y las capas de costmap.
+  los logs de `controller_server`/`bt_navigator`. Sin `velocity_smoother`: `cmd_vel` (`/r2/cmd_vel`) directo.
+- Namespace: sin verificar con ROS 2 real: el `RewrittenYaml` con `root_key`, que `slam_toolbox` exponga
+  `slam_toolbox/serialize_map` bajo el namespace y que el remapeo de TF de `explorer_node` funcione.
+- La QoS de `/r2/scan` del driver (best effort vs reliable) debe ser compatible con slam_toolbox y las capas de costmap.

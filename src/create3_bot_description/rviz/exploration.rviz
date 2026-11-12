@@ -1,3 +1,5 @@
+# Topics use the "/<robot_namespace>" placeholder: master_explore.launch.py replaces it with
+# "/<ns>" (e.g. /r2) or with "" when there is no namespace (nav2_common ReplaceString).
 Panels:
   - Class: rviz_common/Displays
     Name: Displays
@@ -37,13 +39,13 @@ Visualization Manager:
         Durability Policy: Transient Local
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /map
+        Value: /<robot_namespace>/map
       Update Topic:
         Depth: 5
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /map_updates
+        Value: /<robot_namespace>/map_updates
       Use Timestamp: false
       Value: true
     - Class: rviz_default_plugins/TF
@@ -65,7 +67,7 @@ Visualization Manager:
         Durability Policy: Transient Local
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /robot_description
+        Value: /<robot_namespace>/robot_description
       Visual Enabled: true
       Collision Enabled: false
       Value: true
@@ -82,7 +84,7 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Best Effort
-        Value: /scan
+        Value: /<robot_namespace>/scan
       Use Fixed Frame: true
       Value: true
     - Class: rviz_default_plugins/Path
@@ -97,7 +99,7 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /plan
+        Value: /<robot_namespace>/plan
       Value: true
     - Class: rviz_default_plugins/MarkerArray
       Name: Frontiers
@@ -108,7 +110,7 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /frontiers
+        Value: /<robot_namespace>/frontiers
       Value: true
   Enabled: true
   Global Options:
@@ -124,14 +126,14 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /initialpose
+        Value: /<robot_namespace>/initialpose
     - Class: rviz_default_plugins/SetGoal
       Topic:
         Depth: 5
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /goal_pose
+        Value: /<robot_namespace>/goal_pose
   Value: true
   Views:
     Current:

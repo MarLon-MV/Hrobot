@@ -1,12 +1,21 @@
 """Master launch: hardware base + Nav2 + slam_toolbox + explorer + map manager + RViz.
 
-Arguments: use_sim_time (false), rviz (true), maps_dir (~/.create3_maps), map ("").
+Arguments: robot_namespace (env CREATE3_ROBOT_NAMESPACE or 'r2'; empty = none), use_sim_time (false),
+rviz (true), maps_dir (~/.create3_maps), map ("").
 With map:=<name>, slam_toolbox loads <maps_dir>/<name>.posegraph and keeps mapping to EXTEND it.
 If that pose graph is missing the launch aborts with an explicit error (it never silently starts
 a new map).
+
+Namespace decision (applied exactly once, never /r2/r2/...): this launch pushes the namespace
+(PushRosNamespace in a GroupAction) ONLY around the nodes it creates itself (slam_toolbox,
+map_manager_node, explorer_node, rviz2). The hardware_base and navigation includes are OUTSIDE that
+group and receive `robot_namespace`, because each of them applies the namespace on its own.
+TF is remapped to <ns>/tf and <ns>/tf_static in every node that uses TF and YAMLs are rewritten
+with RewrittenYaml(root_key=<ns>); with an empty namespace nothing is pushed or rewritten.
 """
 
 import os
+import sys
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -26,10 +35,22 @@ from launch_ros.event_handlers import OnStateTransition
 from launch_ros.events.lifecycle import ChangeState
 from launch.events import matches_action
 from lifecycle_msgs.msg import Transition
+from nav2_common.launch import ReplaceString
+
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+from create3_namespace import (  # noqa: E402
+    namespaced,
+    resolve_namespace,
+    rewrite_yaml,
+    robot_namespace_argument,
+    tf_remappings,
+)
 
 
 def _setup(context, *args, **kwargs):
-    """Resolve maps_dir/map, validate the pose graph and build slam_toolbox + map_manager_node."""
+    """Resolve maps_dir/map, validate the pose graph and build the namespaced group:
+    slam_toolbox + map_manager_node + explorer_node + rviz2."""
+    namespace = resolve_namespace(context)
     use_sim_time = LaunchConfiguration("use_sim_time")
     maps_dir = os.path.abspath(
         os.path.expanduser(LaunchConfiguration("maps_dir").perform(context))
@@ -42,8 +63,12 @@ def _setup(context, *args, **kwargs):
     )
 
     bringup_share = get_package_share_directory("create3_bot_bringup")
-    slam_yaml = os.path.join(bringup_share, "config", "slam_params.yaml")
-    explorer_yaml = os.path.join(bringup_share, "config", "explorer_params.yaml")
+    description_share = get_package_share_directory("create3_bot_description")
+    slam_yaml = rewrite_yaml(os.path.join(bringup_share, "config", "slam_params.yaml"), namespace)
+    explorer_yaml = rewrite_yaml(
+        os.path.join(bringup_share, "config", "explorer_params.yaml"), namespace
+    )
+    tf_remaps = tf_remappings(namespace)
 
     slam_params = [slam_yaml, {"use_sim_time": use_sim_time}]
     actions = []
@@ -86,9 +111,10 @@ def _setup(context, *args, **kwargs):
             package="slam_toolbox",
             executable="async_slam_toolbox_node",
             name="slam_toolbox",
-            namespace="",
+            namespace="",  # the namespace comes from PushRosNamespace (LifecycleNode needs a str)
             output="screen",
             parameters=slam_params,
+            remappings=tf_remaps,
         )
         actions.append(slam_node)
         actions.append(
@@ -125,6 +151,7 @@ def _setup(context, *args, **kwargs):
                 name="slam_toolbox",
                 output="screen",
                 parameters=slam_params,
+                remappings=tf_remaps,
             )
         )
 
@@ -138,19 +165,51 @@ def _setup(context, *args, **kwargs):
             parameters=[explorer_yaml, {"maps_dir": maps_dir, "use_sim_time": use_sim_time}],
         )
     )
-    return actions
+
+    actions.append(
+        Node(
+            package="create3_autonomous_explorer",
+            executable="explorer_node",
+            name="explorer_node",
+            output="screen",
+            parameters=[explorer_yaml, {"use_sim_time": use_sim_time}],
+            # Absolute target: its tf2_ros::TransformListener runs in an internal root-namespace
+            # node that only sees global remaps (see create3_namespace.tf_remappings).
+            remappings=tf_remappings(namespace, absolute=True),
+        )
+    )
+
+    # RViz: '/<robot_namespace>' in the .rviz is replaced by '/<ns>' (or '' for no namespace, so
+    # topics stay '/map', '/scan', ... without a double slash).
+    rviz_config = ReplaceString(
+        source_file=os.path.join(description_share, "rviz", "exploration.rviz"),
+        replacements={"/<robot_namespace>": f"/{namespace}" if namespace else ""},
+    )
+    actions.append(
+        Node(
+            package="rviz2",
+            executable="rviz2",
+            name="rviz2",
+            arguments=["-d", rviz_config],
+            parameters=[{"use_sim_time": use_sim_time}],
+            remappings=tf_remaps,
+            output="screen",
+            condition=IfCondition(LaunchConfiguration("rviz")),
+        )
+    )
+    return namespaced(namespace, actions)
 
 
 def generate_launch_description():
     bringup_share = get_package_share_directory("create3_bot_bringup")
-    description_share = get_package_share_directory("create3_bot_description")
     use_sim_time = LaunchConfiguration("use_sim_time")
-    explorer_yaml = os.path.join(bringup_share, "config", "explorer_params.yaml")
-    rviz_config = os.path.join(description_share, "rviz", "exploration.rviz")
+    robot_namespace = LaunchConfiguration("robot_namespace")
 
+    # Outside the namespaced group on purpose: each include applies the namespace itself.
     hardware = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(bringup_share, "launch", "hardware_base.launch.py")),
         launch_arguments={
+            "robot_namespace": robot_namespace,
             "use_sim_time": use_sim_time,
             "lidar_port": LaunchConfiguration("lidar_port"),
             "lidar_baudrate": LaunchConfiguration("lidar_baudrate"),
@@ -158,29 +217,12 @@ def generate_launch_description():
     )
     navigation = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(bringup_share, "launch", "navigation.launch.py")),
-        launch_arguments={"use_sim_time": use_sim_time}.items(),
-    )
-
-    explorer = Node(
-        package="create3_autonomous_explorer",
-        executable="explorer_node",
-        name="explorer_node",
-        output="screen",
-        parameters=[explorer_yaml, {"use_sim_time": use_sim_time}],
-    )
-
-    rviz = Node(
-        package="rviz2",
-        executable="rviz2",
-        name="rviz2",
-        arguments=["-d", rviz_config],
-        parameters=[{"use_sim_time": use_sim_time}],
-        output="screen",
-        condition=IfCondition(LaunchConfiguration("rviz")),
+        launch_arguments={"robot_namespace": robot_namespace, "use_sim_time": use_sim_time}.items(),
     )
 
     return LaunchDescription(
         [
+            robot_namespace_argument(),
             DeclareLaunchArgument("use_sim_time", default_value="false"),
             DeclareLaunchArgument("rviz", default_value="true", description="true|false"),
             DeclareLaunchArgument(
@@ -205,7 +247,5 @@ def generate_launch_description():
             OpaqueFunction(function=_setup),
             hardware,
             navigation,
-            explorer,
-            rviz,
         ]
     )

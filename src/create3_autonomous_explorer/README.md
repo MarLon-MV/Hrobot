@@ -8,7 +8,7 @@ Con el mapeo en marcha (slam_toolbox + Nav2 `map_saver`) y `map_manager_node` ej
 
 ```bash
 ros2 run create3_autonomous_explorer map_manager_node
-ros2 service call /save_exploration_map create3_bot_interfaces/srv/SaveExplorationMap "{map_name: sala1}"
+ros2 service call /r2/save_exploration_map create3_bot_interfaces/srv/SaveExplorationMap "{map_name: sala1}"
 ```
 
 - `map_name` se sanea: solo `[A-Za-z0-9_-]`, el resto (espacios, `/`, `\`, `.`, acentos...) pasa a `_`,
@@ -23,8 +23,8 @@ ros2 service call /save_exploration_map create3_bot_interfaces/srv/SaveExplorati
 
 | Archivo | Origen | Uso |
 |---|---|---|
-| `<nombre>.yaml` + `<nombre>.pgm` | `nav2_msgs/srv/SaveMap` (`/map_saver/save_map`) | Navegacion con `map_server`/AMCL |
-| `<nombre>.posegraph` + `<nombre>.data` | `slam_toolbox/srv/SerializePoseGraph` (`/slam_toolbox/serialize_map`) | Ampliar el mapa |
+| `<nombre>.yaml` + `<nombre>.pgm` | `nav2_msgs/srv/SaveMap` (`map_saver/save_map`, `/r2/map_saver/save_map`) | Navegacion con `map_server`/AMCL |
+| `<nombre>.posegraph` + `<nombre>.data` | `slam_toolbox/srv/SerializePoseGraph` (`slam_toolbox/serialize_map`, `/r2/slam_toolbox/serialize_map`) | Ampliar el mapa |
 
 ## Ampliar un mapa existente
 
@@ -42,13 +42,21 @@ slam_toolbox:
 `map:=<nombre>` que automatiza esto se implementa en T-06. Despues, lanzar `explorer_node` y guardar de
 nuevo con el mismo u otro nombre.
 
+## Nombres y namespace
+
+Todos los topics, servicios y acciones (`map`, `frontiers`, `cmd_vel`, `navigate_to_pose`,
+`explore_map`, `save_exploration_map`, `map_saver/save_map`, `slam_toolbox/serialize_map`) son **relativos**:
+se resuelven bajo el namespace del nodo. Con el launch de `create3_bot_bringup` (namespace `r2` por defecto)
+quedan `/r2/map`, `/r2/explore_map`, `/r2/save_exploration_map`, etc.; sin namespace, `/map`... Los
+ejemplos de este README asumen `/r2`; sin namespace quita el prefijo.
+
 ## Parametros de `map_manager_node`
 
 | Parametro | Defecto | Descripcion |
 |---|---|---|
 | `maps_dir` | `~/.create3_maps` | Directorio de salida (se expande `~` y se crea) |
-| `map_saver_service` | `/map_saver/save_map` | Servicio `nav2_msgs/srv/SaveMap` |
-| `serialize_service` | `/slam_toolbox/serialize_map` | Servicio `slam_toolbox/srv/SerializePoseGraph` |
+| `map_saver_service` | `map_saver/save_map` | Servicio `nav2_msgs/srv/SaveMap` |
+| `serialize_service` | `slam_toolbox/serialize_map` | Servicio `slam_toolbox/srv/SerializePoseGraph` |
 | `service_timeout_sec` | `5.0` | Espera maxima (disponibilidad y respuesta) por cada servicio; se acota a 600 s |
 | `map_topic` | `map` | Topico que lee `map_saver` |
 | `image_format` | `pgm` | Formato de imagen |

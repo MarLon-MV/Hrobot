@@ -70,8 +70,8 @@ ExplorerNode::ExplorerNode(const rclcpp::NodeOptions & options)
   free_threshold_ = declare_parameter<double>("free_threshold", 25.0);
   map_frame_ = declare_parameter<std::string>("map_frame", "map");
   base_frame_ = declare_parameter<std::string>("base_frame", "base_link");
-  const std::string map_topic = declare_parameter<std::string>("map_topic", "/map");
-  const std::string frontiers_topic = declare_parameter<std::string>("frontiers_topic", "/frontiers");
+  const std::string map_topic = declare_parameter<std::string>("map_topic", "map");
+  const std::string frontiers_topic = declare_parameter<std::string>("frontiers_topic", "frontiers");
   const std::string cmd_vel_topic = declare_parameter<std::string>("cmd_vel_topic", "cmd_vel");
   const std::string nav_action = declare_parameter<std::string>("navigate_action", "navigate_to_pose");
   // Optional map saving. Empty service name disables it; map_path stays empty then.

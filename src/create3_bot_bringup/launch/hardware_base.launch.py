@@ -3,9 +3,11 @@
 NOTE: the iRobot Create 3 is NOT launched here. It runs its own firmware and is reached over the
 network (Wi-Fi/Ethernet-over-USB) through its embedded micro-ROS/Fast DDS or Zenoh stack. The RPi5
 must share the Create 3 ROS_DOMAIN_ID and RMW (rmw_fastrtps_cpp or rmw_zenoh_cpp, as configured in
-the Create 3 web UI > Application > ROS 2). If the Create 3 uses a namespace (e.g. /robot1), its
-topics (/robot1/odom, /robot1/cmd_vel, TF) must be remapped/bridged; this launch assumes NO
-namespace (/odom, /cmd_vel, /tf with odom->base_link published by the Create 3). Pending hardware
+the Create 3 web UI > Application > ROS 2). The Create 3 lives in a namespace (default /r2: it
+publishes /r2/odom, /r2/tf, /r2/tf_static and listens on /r2/cmd_vel); this launch puts the
+nodes it creates under the same `robot_namespace` and remaps TF to <ns>/tf and <ns>/tf_static
+(empty robot_namespace = no namespace). The namespace is applied here once (see
+create3_namespace.py); callers must not wrap this launch in another namespace. Pending hardware
 check.
 
 LD19 driver ASSUMPTION: LDRobot's official `ldlidar_stl_ros2` package (node executable
@@ -15,16 +17,26 @@ workspace (not available through rosdep).
 """
 
 import os
+import sys
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+from create3_namespace import (  # noqa: E402
+    namespaced,
+    resolve_namespace,
+    robot_namespace_argument,
+    tf_remappings,
+)
 
-def generate_launch_description():
+
+def _setup(context, *args, **kwargs):
+    namespace = resolve_namespace(context)
     use_sim_time = LaunchConfiguration("use_sim_time")
     lidar_port = LaunchConfiguration("lidar_port")
     lidar_baudrate = LaunchConfiguration("lidar_baudrate")
@@ -42,9 +54,11 @@ def generate_launch_description():
         name="robot_state_publisher",
         output="screen",
         parameters=[{"robot_description": robot_description, "use_sim_time": use_sim_time}],
+        remappings=tf_remappings(namespace),
     )
 
-    # Publishes sensor_msgs/LaserScan on /scan with frame laser_frame (defined in the xacro).
+    # Publishes sensor_msgs/LaserScan on `scan` (/<ns>/scan; /scan without namespace) with
+    # frame laser_frame (defined in the xacro).
     ldlidar = Node(
         package="ldlidar_stl_ros2",
         executable="ldlidar_stl_ros2_node",
@@ -64,12 +78,15 @@ def generate_launch_description():
                 "angle_crop_max": 225.0,
             }
         ],
-        # Absolute /scan even if this launch is later put under a namespace.
-        remappings=[("scan", "/scan")],
     )
 
+    return namespaced(namespace, [robot_state_publisher, ldlidar])
+
+
+def generate_launch_description():
     return LaunchDescription(
         [
+            robot_namespace_argument(),
             DeclareLaunchArgument("use_sim_time", default_value="false"),
             DeclareLaunchArgument(
                 "lidar_port",
@@ -77,7 +94,6 @@ def generate_launch_description():
                 description="Serial port of the LD19 (consider a udev symlink, e.g. /dev/ldlidar).",
             ),
             DeclareLaunchArgument("lidar_baudrate", default_value="230400"),
-            robot_state_publisher,
-            ldlidar,
+            OpaqueFunction(function=_setup),
         ]
     )

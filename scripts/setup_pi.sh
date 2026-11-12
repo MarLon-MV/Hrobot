@@ -136,6 +136,11 @@ cat <<EOF
 Siguientes pasos:
   source ${REPO_ROOT}/install/setup.bash
   ls -l /dev/ldlidar            # o /dev/ttyUSB0 si no usas la regla udev
+  scripts/set_robot.sh r2       # opcional: fija el namespace del robot (por defecto r2; no cambia el del Create 3)
+  scripts/set_robot.sh --check  # comprueba que existen /<namespace>/odom y /<namespace>/cmd_vel
   ros2 launch create3_bot_bringup master_explore.launch.py lidar_port:=/dev/ldlidar
-Comprueba que ves los topics del Create 3 (ros2 topic list) y el QoS de /scan (ros2 topic info /scan -v).
+  # otro robot sin tocar el entorno: ... master_explore.launch.py robot_namespace:=r3
+Namespace en esta terminal: ${CREATE3_ROBOT_NAMESPACE-r2} (variable CREATE3_ROBOT_NAMESPACE o 'r2'). Todo el stack cuelga de él: /r2/scan, /r2/map,
+/r2/explore_map, /r2/save_exploration_map... El namespace del Create 3 se cambia en su interfaz web.
+Comprueba que ves los topics del Create 3 (ros2 topic list) y el QoS de /r2/scan (ros2 topic info /r2/scan -v).
 EOF
