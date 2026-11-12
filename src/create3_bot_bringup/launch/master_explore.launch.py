@@ -150,7 +150,11 @@ def generate_launch_description():
 
     hardware = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(bringup_share, "launch", "hardware_base.launch.py")),
-        launch_arguments={"use_sim_time": use_sim_time}.items(),
+        launch_arguments={
+            "use_sim_time": use_sim_time,
+            "lidar_port": LaunchConfiguration("lidar_port"),
+            "lidar_baudrate": LaunchConfiguration("lidar_baudrate"),
+        }.items(),
     )
     navigation = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(bringup_share, "launch", "navigation.launch.py")),
@@ -179,6 +183,12 @@ def generate_launch_description():
         [
             DeclareLaunchArgument("use_sim_time", default_value="false"),
             DeclareLaunchArgument("rviz", default_value="true", description="true|false"),
+            DeclareLaunchArgument(
+                "lidar_port",
+                default_value="/dev/ttyUSB0",
+                description="Serial port of the LD19 (forwarded to hardware_base); e.g. /dev/ldlidar.",
+            ),
+            DeclareLaunchArgument("lidar_baudrate", default_value="230400"),
             DeclareLaunchArgument("maps_dir", default_value="~/.create3_maps"),
             DeclareLaunchArgument(
                 "map",
