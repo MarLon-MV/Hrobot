@@ -14,13 +14,13 @@ namespace
 constexpr std::int8_t kUnknown = -1;
 constexpr std::int8_t kFree = 0;
 
-inline std::size_t idx(int col, int row, int width)
+[[nodiscard]] inline std::size_t idx(int col, int row, int width)
 {
   return static_cast<std::size_t>(row) * static_cast<std::size_t>(width) +
          static_cast<std::size_t>(col);
 }
 
-bool is_frontier_cell(const GridMap & map, int col, int row)
+[[nodiscard]] bool is_frontier_cell(const GridMap & map, int col, int row)
 {
   if (map.data[idx(col, row, map.width)] != kFree) {
     return false;

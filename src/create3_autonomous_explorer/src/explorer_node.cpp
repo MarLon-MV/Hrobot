@@ -24,12 +24,12 @@ namespace
 {
 
 /// Yaw from a quaternion (z-axis rotation); avoids a tf2_geometry_msgs dependency.
-double yaw_from_quaternion(double x, double y, double z, double w)
+[[nodiscard]] double yaw_from_quaternion(double x, double y, double z, double w)
 {
   return std::atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z));
 }
 
-visualization_msgs::msg::Marker make_marker(
+[[nodiscard]] visualization_msgs::msg::Marker make_marker(
   int id, const std::string & ns, int type, double x, double y, double z, double scale)
 {
   visualization_msgs::msg::Marker m;
@@ -79,7 +79,7 @@ ExplorerNode::ExplorerNode(const rclcpp::NodeOptions & options)
     declare_parameter<std::string>("save_map_service", "save_exploration_map");
   save_map_on_finish_ = declare_parameter<bool>("save_map_on_finish", true) && !save_service.empty();
   map_name_ = declare_parameter<std::string>("map_name", "exploration_map");
-  save_timeout_sec_ = declare_parameter<double>("save_timeout_sec", 5.0);
+  save_timeout_sec_ = declare_parameter<double>("save_timeout_sec", 30.0);
 
   if (!(control_rate_hz > 0.0)) {
     RCLCPP_WARN(get_logger(), "control_rate_hz must be > 0; using 10.0");
@@ -148,12 +148,18 @@ rclcpp_action::GoalResponse ExplorerNode::handle_goal(
     RCLCPP_WARN(get_logger(), "Goal rejected: invalid max_duration_sec");
     return rclcpp_action::GoalResponse::REJECT;
   }
-  std::scoped_lock lock(mutex_);
-  if (busy_) {
+  bool already_busy = false;
+  {
+    std::scoped_lock lock(mutex_);
+    already_busy = busy_;
+    if (!already_busy) {
+      busy_ = true;  // reserve until handle_accepted / completion
+    }
+  }
+  if (already_busy) {
     RCLCPP_WARN(get_logger(), "Goal rejected: an exploration is already running");
     return rclcpp_action::GoalResponse::REJECT;
   }
-  busy_ = true;  // reserve until handle_accepted / completion
   return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
 }
 
@@ -171,31 +177,36 @@ rclcpp_action::CancelResponse ExplorerNode::handle_cancel(
 void ExplorerNode::handle_accepted(std::shared_ptr<GoalHandleExploreMap> goal_handle)
 {
   const double now_s = now_sec();
-  std::scoped_lock lock(mutex_);
-  goal_handle_ = goal_handle;
-  busy_ = true;
-  cancel_requested_ = false;
-  finishing_ = false;
-  stop_requested_ = false;
-  save_request_needed_ = false;
-  save_pending_ = false;
-  map_path_.clear();
-  ++save_session_;
-  max_duration_sec_ = static_cast<double>(goal_handle->get_goal()->max_duration_sec);
-  start_time_ = now_s;
-  frontiers_explored_ = 0;
-  distance_traveled_ = 0.0;
-  last_pose_.reset();
-  frontiers_.clear();
-  last_detection_time_ = 0.0;
-  current_goal_.reset();
-  nav_pending_ = false;
-  nav_accepted_ = false;
-  nav_handle_.reset();
-  recovery_attempts_ = 0;
-  evaluator_.clear_blacklist();
-  state_ = map_ ? ExplorerState::Detecting : ExplorerState::WaitingForMap;
-  RCLCPP_INFO(get_logger(), "Exploration started (max_duration_sec=%.1f)", max_duration_sec_);
+  double max_duration = 0.0;
+  {
+    std::scoped_lock lock(mutex_);
+    goal_handle_ = goal_handle;
+    busy_ = true;
+    cancel_requested_ = false;
+    finishing_ = false;
+    stop_requested_ = false;
+    save_request_needed_ = false;
+    save_pending_ = false;
+    map_path_.clear();
+    posegraph_path_.clear();
+    ++save_session_;
+    max_duration_sec_ = static_cast<double>(goal_handle->get_goal()->max_duration_sec);
+    start_time_ = now_s;
+    frontiers_explored_ = 0;
+    distance_traveled_ = 0.0;
+    last_pose_.reset();
+    frontiers_.clear();
+    last_detection_time_ = 0.0;
+    current_goal_.reset();
+    nav_pending_ = false;
+    nav_accepted_ = false;
+    nav_handle_.reset();
+    recovery_attempts_ = 0;
+    evaluator_.clear_blacklist();
+    state_ = map_ ? ExplorerState::Detecting : ExplorerState::WaitingForMap;
+    max_duration = max_duration_sec_;
+  }
+  RCLCPP_INFO(get_logger(), "Exploration started (max_duration_sec=%.1f)", max_duration);
 }
 
 // ---------------------------------------------------------------------------
@@ -254,6 +265,7 @@ bool ExplorerNode::lookup_pose(Pose2D & pose) const
 void ExplorerNode::nav_goal_response(std::uint64_t generation, std::shared_ptr<NavGoalHandle> handle)
 {
   const double now_s = now_sec();
+  bool handled = false;
   {
     std::scoped_lock lock(mutex_);
     if (generation == nav_generation_ && nav_pending_) {
@@ -264,7 +276,7 @@ void ExplorerNode::nav_goal_response(std::uint64_t generation, std::shared_ptr<N
         best_distance_remaining_ = std::numeric_limits<double>::infinity();
         last_progress_time_ = now_s;
       } else {
-        RCLCPP_WARN(get_logger(), "NavigateToPose goal rejected; blacklisting frontier");
+        queue_log_locked(true, "NavigateToPose goal rejected; blacklisting frontier");
         if (current_goal_) {
           evaluator_.add_to_blacklist(current_goal_->centroid);
         }
@@ -276,8 +288,12 @@ void ExplorerNode::nav_goal_response(std::uint64_t generation, std::shared_ptr<N
           state_ = ExplorerState::Detecting;
         }
       }
-      return;
+      handled = true;
     }
+  }
+  flush_logs();
+  if (handled) {
+    return;
   }
   // Stale response (goal was retired meanwhile): cancel it if it was accepted.
   cancel_nav_goal_safe(handle);
@@ -300,8 +316,17 @@ void ExplorerNode::nav_feedback(
 
 void ExplorerNode::nav_result(std::uint64_t generation, const NavGoalHandle::WrappedResult & result)
 {
-  const double now_s = now_sec();
-  std::scoped_lock lock(mutex_);
+  {
+    const double now_s = now_sec();
+    std::scoped_lock lock(mutex_);
+    handle_nav_result_locked(generation, result, now_s);
+  }
+  flush_logs();
+}
+
+void ExplorerNode::handle_nav_result_locked(
+  std::uint64_t generation, const NavGoalHandle::WrappedResult & result, double now_s)
+{
   if (generation != nav_generation_) {
     return;  // stale: retired by us (cancel, stuck, finish)
   }
@@ -324,13 +349,13 @@ void ExplorerNode::nav_result(std::uint64_t generation, const NavGoalHandle::Wra
       state_ = ExplorerState::Detecting;
       break;
     case rclcpp_action::ResultCode::CANCELED:
-      RCLCPP_WARN(get_logger(), "NavigateToPose was canceled externally");
+      queue_log_locked(true, "NavigateToPose was canceled externally");
       state_ = ExplorerState::Detecting;
       break;
     case rclcpp_action::ResultCode::ABORTED:
     case rclcpp_action::ResultCode::UNKNOWN:
     default:
-      RCLCPP_WARN(get_logger(), "NavigateToPose aborted/unknown; blacklisting frontier");
+      queue_log_locked(true, "NavigateToPose aborted/unknown; blacklisting frontier");
       ++recovery_attempts_;
       if (recovery_attempts_ > max_recovery_attempts_) {
         begin_finish_locked(FinishStatus::Failure, "too many failed navigation goals", now_s);
@@ -464,7 +489,7 @@ std::shared_ptr<const GridMap> ExplorerNode::plan_locked(
 
     if (state_ == ExplorerState::Navigating) {
       if ((nav_pending_ || nav_accepted_) && now_s - last_progress_time_ > stuck_timeout_sec_) {
-        RCLCPP_WARN(get_logger(), "Navigation stuck (no progress); starting rotation recovery");
+        queue_log_locked(true, "Navigation stuck (no progress); starting rotation recovery");
         ++recovery_attempts_;
         retire_nav_locked();
         if (recovery_attempts_ > max_recovery_attempts_) {
@@ -527,8 +552,7 @@ void ExplorerNode::apply_detection_locked(
       act.send_goal_yaw = std::atan2(best->centroid.y - pose.y, best->centroid.x - pose.x);
       act.send_goal_generation = nav_generation_;
     } else {
-      RCLCPP_WARN_THROTTLE(
-        get_logger(), *get_clock(), 5000, "navigate_to_pose action server not available yet");
+      queue_log_locked(true, "navigate_to_pose action server not available yet", 5000);
     }
   }
 
@@ -555,6 +579,7 @@ void ExplorerNode::update_feedback_locked(TickActions & act) const
 
 void ExplorerNode::execute(TickActions & act)
 {
+  flush_logs();  // messages queued by plan_locked / apply_detection_locked
   for (const auto & h : act.cancel_nav) {
     cancel_nav_goal_safe(h);
   }
@@ -635,7 +660,7 @@ void ExplorerNode::begin_finish_locked(
   if (finishing_) {
     return;
   }
-  RCLCPP_INFO(get_logger(), "Finishing exploration: %s", message.c_str());
+  queue_log_locked(false, "Finishing exploration: " + message);
   retire_nav_locked();
   current_goal_.reset();
   finishing_ = true;
@@ -647,9 +672,33 @@ void ExplorerNode::begin_finish_locked(
   save_deadline_ = now_s + save_timeout_sec_;
 }
 
+void ExplorerNode::queue_log_locked(bool warn, std::string text, int throttle_ms)
+{
+  pending_logs_.push_back(LogEntry{warn, throttle_ms, std::move(text)});
+}
+
 // ---------------------------------------------------------------------------
 // Helpers (no lock)
 // ---------------------------------------------------------------------------
+
+void ExplorerNode::flush_logs()
+{
+  std::vector<LogEntry> logs;
+  {
+    std::scoped_lock lock(mutex_);
+    logs.swap(pending_logs_);
+  }
+  for (const auto & entry : logs) {
+    if (!entry.warn) {
+      RCLCPP_INFO(get_logger(), "%s", entry.text.c_str());
+    } else if (entry.throttle_ms > 0) {
+      RCLCPP_WARN_THROTTLE(
+        get_logger(), *get_clock(), entry.throttle_ms, "%s", entry.text.c_str());
+    } else {
+      RCLCPP_WARN(get_logger(), "%s", entry.text.c_str());
+    }
+  }
+}
 
 void ExplorerNode::send_nav_goal(const Frontier & frontier, double yaw, std::uint64_t generation)
 {
@@ -682,8 +731,10 @@ void ExplorerNode::send_save_request()
 {
   if (!save_client_ || !save_client_->service_is_ready()) {
     RCLCPP_WARN(get_logger(), "Save-map service not available; map_path will be empty");
-    std::scoped_lock lock(mutex_);
-    save_pending_ = false;
+    {
+      std::scoped_lock lock(mutex_);
+      save_pending_ = false;
+    }
     return;
   }
   auto request = std::make_shared<SaveMapSrv::Request>();
@@ -696,16 +747,27 @@ void ExplorerNode::send_save_request()
   save_client_->async_send_request(
     request, [this, session](rclcpp::Client<SaveMapSrv>::SharedFuture future) {
       const auto response = future.get();
-      std::scoped_lock lock(mutex_);
-      if (session != save_session_) {
-        return;  // late response from a previous session
+      bool failed = false;
+      {
+        std::scoped_lock lock(mutex_);
+        if (session != save_session_) {
+          return;  // late response from a previous session
+        }
+        if (response->success) {
+          map_path_ = response->map_path;
+          posegraph_path_ = response->posegraph_path;
+        } else {
+          failed = true;
+        }
+        save_pending_ = false;
       }
-      if (response->success) {
-        map_path_ = response->map_path;
-      } else {
+      if (failed) {
         RCLCPP_WARN(get_logger(), "Save map failed: %s", response->message.c_str());
+      } else {
+        RCLCPP_INFO(
+          get_logger(), "Map saved (map_path='%s', posegraph_path='%s')",
+          response->map_path.c_str(), response->posegraph_path.c_str());
       }
-      save_pending_ = false;
     });
 }
 

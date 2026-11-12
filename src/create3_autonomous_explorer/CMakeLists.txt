@@ -19,12 +19,14 @@ find_package(geometry_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
+find_package(slam_toolbox REQUIRED)
 find_package(create3_bot_interfaces REQUIRED)
 
 # Pure C++ library: no ROS dependencies (domain logic, unit-testable).
 add_library(${PROJECT_NAME}_lib
   src/frontier_detector.cpp
   src/goal_evaluator.cpp
+  src/map_naming.cpp
 )
 target_include_directories(${PROJECT_NAME}_lib PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -49,6 +51,19 @@ ament_target_dependencies(explorer_node
   create3_bot_interfaces
 )
 
+# Map manager node (SaveExplorationMap service -> nav2 map_saver + slam_toolbox serialize).
+add_executable(map_manager_node
+  src/map_manager_node.cpp
+  src/map_manager_main.cpp
+)
+target_link_libraries(map_manager_node ${PROJECT_NAME}_lib)
+ament_target_dependencies(map_manager_node
+  rclcpp
+  nav2_msgs
+  slam_toolbox
+  create3_bot_interfaces
+)
+
 install(DIRECTORY include/ DESTINATION include)
 install(TARGETS ${PROJECT_NAME}_lib
   EXPORT export_${PROJECT_NAME}
@@ -56,7 +71,7 @@ install(TARGETS ${PROJECT_NAME}_lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
 )
-install(TARGETS explorer_node
+install(TARGETS explorer_node map_manager_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -68,6 +83,9 @@ if(BUILD_TESTING)
 
   ament_add_gtest(test_goal_evaluator test/test_goal_evaluator.cpp)
   target_link_libraries(test_goal_evaluator ${PROJECT_NAME}_lib)
+
+  ament_add_gtest(test_map_naming test/test_map_naming.cpp)
+  target_link_libraries(test_map_naming ${PROJECT_NAME}_lib)
 endif()
 
 ament_export_include_directories(include)
@@ -81,6 +99,7 @@ ament_export_dependencies(
   visualization_msgs
   tf2
   tf2_ros
+  slam_toolbox
   create3_bot_interfaces
 )
 ament_package()

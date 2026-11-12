@@ -9,7 +9,7 @@ namespace
 {
 constexpr double kPi = 3.14159265358979323846;
 
-double wrap_angle(double a)
+[[nodiscard]] double wrap_angle(double a)
 {
   a = std::fmod(a + kPi, 2.0 * kPi);
   if (a < 0.0) {

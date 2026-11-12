@@ -61,6 +61,14 @@ private:
     Failure     ///< Too many recovery attempts, etc.
   };
 
+  /// Log message queued while `mutex_` is held; emitted by `flush_logs()` after releasing it.
+  struct LogEntry
+  {
+    bool warn{false};
+    int throttle_ms{0};  ///< > 0: throttled warning.
+    std::string text;
+  };
+
   /// Work decided under the lock and executed after releasing it.
   struct TickActions
   {
@@ -98,6 +106,8 @@ private:
     std::uint64_t generation,
     const std::shared_ptr<const NavigateToPose::Feedback> & feedback);
   void nav_result(std::uint64_t generation, const NavGoalHandle::WrappedResult & result);
+  void handle_nav_result_locked(
+    std::uint64_t generation, const NavGoalHandle::WrappedResult & result, double now_s);
 
   // --- Control loop ---
   void control_loop();
@@ -114,10 +124,14 @@ private:
   void begin_finish_locked(FinishStatus status, const std::string & message, double now_s);
   void retire_nav_locked();
   void update_feedback_locked(TickActions & act) const;
+  /// Queues a log message (lock held). Never logs directly while the mutex is taken.
+  void queue_log_locked(bool warn, std::string text, int throttle_ms = 0);
 
   // --- Helpers (no lock) ---
   void send_nav_goal(const Frontier & frontier, double yaw, std::uint64_t generation);
   void send_save_request();
+  /// Emits queued log messages. Takes the lock only to swap the queue, logs outside it.
+  void flush_logs();
   /// Cancels a Nav2 goal; swallows errors from already-terminal/unknown goals.
   void cancel_nav_goal_safe(const std::shared_ptr<NavGoalHandle> & handle);
   void publish_markers(
@@ -152,7 +166,7 @@ private:
   double detection_period_sec_{1.0};
   bool save_map_on_finish_{true};
   std::string map_name_;
-  double save_timeout_sec_{5.0};
+  double save_timeout_sec_{30.0};
 
   // --- Shared state, guarded by mutex_ ---
   mutable std::mutex mutex_;
@@ -191,6 +205,8 @@ private:
   bool save_pending_{false};
   double save_deadline_{0.0};
   std::string map_path_;
+  std::string posegraph_path_;
+  std::vector<LogEntry> pending_logs_;
 };
 
 }  // namespace create3_autonomous_explorer

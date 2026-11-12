@@ -4,4 +4,5 @@ string map_name
 # Response
 bool success
 string map_path
+string posegraph_path
 string message
