@@ -52,10 +52,32 @@ nunca del explorer.
   por rotación si se atasca y publicación de `/frontiers`.
 - **`map_manager_node`**: guarda el mapa y el posegraph (permite ampliarlo después).
 
+## Preparar la Raspberry Pi
+
+Requisito: Ubuntu con ROS 2 Jazzy ya instalado (`/opt/ros/jazzy`). El script no instala ROS.
+
+```bash
+git clone https://github.com/MarLon-MV/Hrobot.git && cd Hrobot
+scripts/setup_pi.sh            # herramientas, driver LD19, permisos, rosdep y colcon build
+source install/setup.bash
+```
+
+Opciones: `--skip-udev`, `--skip-build`; variables `LDLIDAR_REF` (rama/tag/commit del driver,
+por defecto `master`), `JOBS` (workers de colcon, por defecto 2) y `LDLIDAR_REPO`. Es idempotente.
+Más detalle en [`scripts/setup_pi.sh`](../scripts/setup_pi.sh).
+
+Qué hace el script:
+
+1. Instala `git`, `colcon` y `rosdep`, e inicializa `rosdep`.
+2. Clona o actualiza el driver oficial del LD19 en `src/ldlidar_stl_ros2` (ignorado por git).
+3. Añade tu usuario al grupo `dialout` e instala una regla udev (CP2102, `10c4:ea60`) que crea
+   el symlink `/dev/ldlidar`. Tras la primera vez, cierra sesión y vuelve a entrar.
+4. Ejecuta `rosdep install` (sin `-r`: se detiene si falta una dependencia) y `colcon build --symlink-install`.
+
 ## Uso rápido
 
 ```bash
-# Compilar (en un entorno con ROS 2 Jazzy)
+# Compilar a mano (si no usas el script), en un entorno con ROS 2 Jazzy
 cd <raíz del repo>
 colcon build --packages-select create3_bot_interfaces create3_bot_description \
   create3_autonomous_explorer create3_bot_bringup
@@ -65,7 +87,8 @@ source install/setup.bash
 colcon test --packages-select create3_autonomous_explorer && colcon test-result --verbose
 
 # Lanzar todo (slam + Nav2 + explorer + map_manager + RViz)
-ros2 launch create3_bot_bringup master_explore.launch.py
+ros2 launch create3_bot_bringup master_explore.launch.py lidar_port:=/dev/ldlidar
+# Otros argumentos: lidar_baudrate (230400), rviz:=true|false, use_sim_time, maps_dir, map, slam_lifecycle
 
 # Iniciar la exploración
 ros2 action send_goal /explore_map create3_bot_interfaces/action/ExploreMap \
@@ -84,7 +107,10 @@ Los mapas se guardan en `~/.create3_maps` (`maps_dir`). Más detalle en los READ
 ## Dependencias externas
 
 - ROS 2 Jazzy, Nav2 (`nav2_bringup`, `nav2_map_server`...), `slam_toolbox`, `robot_state_publisher`, `xacro`, `rviz2`.
-- Driver del LD19: se asumió **`ldlidar_stl_ros2`**. No está en rosdep: clonarlo en este workspace.
+- Driver del LD19: **`ldlidar_stl_ros2`** (repo oficial de LDRobot, `ldrobotSensorTeam/ldlidar_stl_ros2`,
+  rama `master`; soporta LD06/LD19/STL-27L). No está en rosdep: `scripts/setup_pi.sh` lo clona en
+  `src/ldlidar_stl_ros2`. El repo declara soporte de ROS 2 Foxy y posteriores; Jazzy no figura
+  explícitamente.
 - Create 3 accesible por red (micro-ROS) con el mismo `ROS_DOMAIN_ID` y RMW que la RPi5.
 
 ## Convenciones
@@ -100,6 +126,9 @@ Los mapas se guardan en `~/.create3_maps` (`maps_dir`). Más detalle en los READ
    `nav2_msgs/SaveMap` y `slam_toolbox/SerializePoseGraph` se escribieron de memoria.
 2. Arrancar Nav2 y revisar avisos de parámetros desconocidos en `nav2_params.yaml`.
 3. Confirmar si `async_slam_toolbox_node` es un nodo de ciclo de vida (si no, `slam_lifecycle:=false`).
-4. Driver LD19: puerto (`/dev/ttyUSB0`), baudrate (230400), sentido de giro (`laser_scan_dir`) y QoS de `/scan`.
+4. Driver LD19: sentido de giro (`laser_scan_dir`) y, sobre todo, la **QoS de `/scan`**: si el driver publica
+   *best effort* y slam_toolbox o el costmap de Nav2 piden *reliable*, no recibirán datos
+   (`ros2 topic info /scan -v`). Puerto (`/dev/ldlidar`) y baudrate (230400) ya están configurados.
+   `scripts/setup_pi.sh` y su regla udev no se han probado en la Pi.
 5. Medir en el robot la posición real del LiDAR (`laser_x/y/z` en el xacro; `laser_z` = 0.12 m es un valor supuesto).
 6. Sustituir el maintainer `dev@example.com` de los `package.xml`.
