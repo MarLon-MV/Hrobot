@@ -142,6 +142,21 @@ ros2 launch create3_bot_bringup master_explore.launch.py map:=sala1
 Los mapas se guardan en `~/.create3_maps` (`maps_dir`). Más detalle en los README de
 [explorer](create3_autonomous_explorer/README.md) y [bringup](create3_bot_bringup/README.md).
 
+## RViz en otro equipo (portátil Ubuntu)
+
+Lanza la Pi con `rviz:=false` y abre RViz en un PC con ROS 2 Jazzy y `rviz2`, en la misma red:
+
+```bash
+scripts/rviz_remote.sh                 # namespace por defecto: $CREATE3_ROBOT_NAMESPACE o r2
+scripts/rviz_remote.sh -n r3           # otro robot
+scripts/rviz_remote.sh --dry-run       # muestra la config y el comando sin abrir RViz
+```
+
+El script sustituye el marcador `/<robot_namespace>` del `.rviz` por el namespace y remapea
+`/tf` y `/tf_static` a `/<ns>/tf` y `/<ns>/tf_static`. Requisitos en el PC: mismo `ROS_DOMAIN_ID` y RMW
+que la Pi, **hora sincronizada con la Pi** (un desfase de unos segundos rompe el TF en RViz) y red sin
+bloqueo de multicast.
+
 ## Dependencias externas
 
 - ROS 2 Jazzy, Nav2 (`nav2_bringup`, `nav2_map_server`...), `slam_toolbox`, `robot_state_publisher`, `xacro`, `rviz2`.
