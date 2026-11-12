@@ -13,7 +13,7 @@ explore y mapee entornos desconocidos de forma autónoma (slam_toolbox + Nav2 + 
 |---|---|---|
 | [`create3_bot_interfaces`](create3_bot_interfaces) | ament_cmake | Acción `ExploreMap`, mensaje `FrontierInfo`, servicio `SaveExplorationMap`. Sin código. |
 | [`create3_bot_description`](create3_bot_description) | ament_cmake | URDF/xacro (`base_link` radio 0.171 m → `laser_frame`) y config de RViz. |
-| [`create3_autonomous_explorer`](create3_autonomous_explorer) | ament_cmake | Lib pura `${PROJECT_NAME}_lib`, `explorer_node` y `map_manager_node`. |
+| [`create3_autonomous_explorer`](create3_autonomous_explorer) | ament_cmake | Lib pura `${PROJECT_NAME}_lib`, `explorer_node`, `map_manager_node` y `odom_relay_node`. |
 | [`create3_bot_bringup`](create3_bot_bringup) | ament_cmake | Solo `config/` y `launch/`. |
 
 Cada paquete tiene su propio README con el detalle (explorer y bringup).
@@ -60,13 +60,14 @@ llevan prefijo. Los YAML se reescriben al arrancar con `nav2_common` (`Rewritten
 |---|---|---|
 | Escaneo LD19 | `/r2/scan` | `/scan` |
 | Mapa / fronteras | `/r2/map`, `/r2/frontiers` | `/map`, `/frontiers` |
-| Odometria / velocidad (Create 3) | `/r2/odom`, `/r2/cmd_vel` | `/odom`, `/cmd_vel` |
+| Odometria / velocidad (Create 3) | `/r2/odom` (BEST_EFFORT), `/r2/cmd_vel` | `/odom`, `/cmd_vel` |
+| Odometria para Nav2 (rele RELIABLE) | `/r2/odom_reliable` | `/odom_reliable` |
 | TF | `/r2/tf`, `/r2/tf_static` | `/tf`, `/tf_static` |
 | Accion de exploracion | `/r2/explore_map` | `/explore_map` |
 | Guardar mapa | `/r2/save_exploration_map` | `/save_exploration_map` |
 | Nav2 | `/r2/navigate_to_pose`, `/r2/map_saver/save_map` | `/navigate_to_pose`, `/map_saver/save_map` |
 | slam_toolbox | `/r2/slam_toolbox/serialize_map` | `/slam_toolbox/serialize_map` |
-| Nodos | `/r2/explorer_node`, `/r2/controller_server`... | `/explorer_node`, `/controller_server`... |
+| Nodos | `/r2/explorer_node`, `/r2/odom_relay_node`, `/r2/controller_server`... | `/explorer_node`, `/controller_server`... |
 
 Cambiar de robot (otro nombre, p. ej. `r3`): `scripts/set_robot.sh r3` (guarda
 `CREATE3_ROBOT_NAMESPACE` en `~/.config/create3_bot/robot.env` y lo carga desde `~/.bashrc`; `--show`,
@@ -80,6 +81,7 @@ propio Create 3 se cambia en su interfaz web (Application > ROS 2); el script no
   protegida por `std::mutex`, pose por TF2 `map→base_link`, cliente de `navigate_to_pose`, recuperación
   por rotación si se atasca y publicación de `frontiers`.
 - **`map_manager_node`**: guarda el mapa y el posegraph (permite ampliarlo después).
+- **`odom_relay_node`**: republica `/r2/odom` (BEST_EFFORT, Create 3) como `/r2/odom_reliable` (RELIABLE) porque Nav2 suscribe RELIABLE y no conectaria con el Create 3. Comprobar: `ros2 topic info /r2/odom_reliable -v` (RELIABLE, publicador `odom_relay_node`, suscriptores de Nav2).
 
 ## Preparar la Raspberry Pi
 

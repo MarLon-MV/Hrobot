@@ -64,6 +64,28 @@ ejemplos de este README asumen `/r2`; sin namespace quita el prefijo.
 | `occupied_thresh` / `free_thresh` | `0.65` / `0.25` | Umbrales de `SaveMap` |
 | `save_service_name` | `save_exploration_map` | Nombre del servicio ofrecido |
 
+## `odom_relay_node` (rele de odometria para Nav2)
+
+El Create 3 publica `/r2/odom` con QoS `BEST_EFFORT`, depth 1, mientras que `controller_server` y
+`bt_navigator` de Nav2 suscriben `RELIABLE`, depth 1. Un suscriptor RELIABLE no se conecta a un publicador
+BEST_EFFORT, asi que Nav2 se quedaba sin odometria. `odom_relay_node` suscribe `nav_msgs/msg/Odometry` con
+`rclcpp::SensorDataQoS()` (best effort) y republica el mismo mensaje, sin copiarlo ni modificarlo, con QoS
+`RELIABLE`. En `nav2_params.yaml`, `bt_navigator.odom_topic` y `controller_server.odom_topic` apuntan a
+`odom_reliable`. Lo lanza `navigation.launch.py`.
+
+| Parametro | Defecto | Descripcion |
+|---|---|---|
+| `input_topic` | `odom` | Odometria del Create 3 (relativo: `/r2/odom`) |
+| `output_topic` | `odom_reliable` | Salida RELIABLE (relativo: `/r2/odom_reliable`) |
+| `output_depth` | `10` | Profundidad de la cola del publicador (entero, `>= 1`; si no, se usa 1) |
+
+```bash
+ros2 run create3_autonomous_explorer odom_relay_node --ros-args -r __ns:=/r2   # normalmente lo lanza navigation.launch.py
+ros2 topic info /r2/odom_reliable -v
+```
+Debe mostrar `Reliability: RELIABLE` con publicador `odom_relay_node` y como suscriptores `controller_server` y
+`bt_navigator` (tambien `RELIABLE`). `ros2 topic hz /r2/odom_reliable` debe dar tasa > 0. Sin verificar con el robot real.
+
 ## Relacion entre timeouts
 
 `map_manager_node` espera hasta `service_timeout_sec` por disponibilidad y otro tanto por respuesta

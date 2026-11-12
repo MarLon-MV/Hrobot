@@ -6,7 +6,9 @@ already limits acceleration, and the Create 3 applies its own safety limits).
 
 Namespace: the nodes are put under `robot_namespace` here (applied once; callers must not wrap this
 launch in another namespace), the YAML is rewritten with RewrittenYaml(root_key=<ns>) and TF is
-remapped to <ns>/tf and <ns>/tf_static. Empty robot_namespace = no namespace, no RewrittenYaml (the markers '/<robot_namespace>' of the
+remapped to <ns>/tf and <ns>/tf_static. odom_relay_node (create3_autonomous_explorer) republishes
+the Create 3 BEST_EFFORT `odom` as RELIABLE `odom_reliable`, which bt_navigator/controller_server read.
+Empty robot_namespace = no namespace, no RewrittenYaml (the markers '/<robot_namespace>' of the
 costmap topics are still substituted: '/scan', '/map').
 """
 
@@ -45,6 +47,8 @@ def _setup(context, *args, **kwargs):
     # Costmaps are sub-nodes of controller_server/planner_server and read use_sim_time from them.
     node_params = [params_file, {"use_sim_time": use_sim_time}]
     tf_remaps = tf_remappings(namespace)
+    # odom_relay_node parameters live in explorer_params.yaml (section `odom_relay_node:`).
+    relay_params = rewrite_yaml(LaunchConfiguration("explorer_params_file"), namespace)
 
     def nav2_node(package, executable, **kwargs):
         return Node(
@@ -62,6 +66,16 @@ def _setup(context, *args, **kwargs):
     planner = nav2_node("nav2_planner", "planner_server")
     behaviors = nav2_node("nav2_behaviors", "behavior_server")
     bt_navigator = nav2_node("nav2_bt_navigator", "bt_navigator")
+
+    # Create 3 odom is BEST_EFFORT; Nav2 subscribes RELIABLE (odom_topic: odom_reliable). The node
+    # name must be `odom_relay_node` to match the YAML key.
+    odom_relay = Node(
+        package="create3_autonomous_explorer",
+        executable="odom_relay_node",
+        name="odom_relay_node",
+        output="screen",
+        parameters=[relay_params, {"use_sim_time": use_sim_time}],
+    )
 
     lifecycle_nav = Node(
         package="nav2_lifecycle_manager",
@@ -96,6 +110,7 @@ def _setup(context, *args, **kwargs):
             planner,
             behaviors,
             bt_navigator,
+            odom_relay,
             lifecycle_nav,
             map_saver,
             lifecycle_map_saver,
@@ -107,11 +122,15 @@ def generate_launch_description():
     default_params = os.path.join(
         get_package_share_directory("create3_bot_bringup"), "config", "nav2_params.yaml"
     )
+    default_explorer_params = os.path.join(
+        get_package_share_directory("create3_bot_bringup"), "config", "explorer_params.yaml"
+    )
     return LaunchDescription(
         [
             robot_namespace_argument(),
             DeclareLaunchArgument("use_sim_time", default_value="false"),
             DeclareLaunchArgument("params_file", default_value=default_params),
+            DeclareLaunchArgument("explorer_params_file", default_value=default_explorer_params),
             DeclareLaunchArgument("autostart", default_value="true"),
             OpaqueFunction(function=_setup),
         ]

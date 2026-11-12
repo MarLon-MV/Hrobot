@@ -2,6 +2,8 @@
 # NO amcl and NO map_server: slam_toolbox provides map and the map->odom transform.
 # Only the navigation servers are launched (see launch/navigation.launch.py).
 # Odometry and the odom->base_link TF come from the Create 3 (odom, tf); commands go to cmd_vel.
+# Nav2 reads the odometry from `odom_reliable` (odom_relay_node republishes /<ns>/odom as RELIABLE: the Create 3
+# publishes BEST_EFFORT depth 1, which RELIABLE subscribers of bt_navigator/controller_server never match).
 # Names of the nav2 servers are relative: they resolve under the robot namespace (/r2/odom, /r2/cmd_vel).
 # launch/navigation.launch.py rewrites this file with RewrittenYaml(root_key=<ns>) when a namespace is set.
 #
@@ -12,7 +14,8 @@
 #    /<ns>/local_costmap/scan (wrong: the LiDAR is /<ns>/scan). They are therefore ABSOLUTE below, with
 #    the marker "/<robot_namespace>/..." that navigation.launch.py replaces textually
 #    (ReplaceString, before RewrittenYaml) by "/r2/..." or, with an empty namespace, by "/...".
-#  * Correct as relative (resolve in the node namespace /<ns>): bt_navigator.odom_topic, behavior_server
+#  * Correct as relative (resolve in the node namespace /<ns>): bt_navigator.odom_topic and
+#    controller_server.odom_topic (both -> /<ns>/odom_reliable; the costmaps have no odom_topic), behavior_server
 #    local/global_costmap_topic and *_footprint_topic ("local_costmap/costmap_raw" -> /<ns>/local_costmap/
 #    costmap_raw, which is where the nested costmap publishes it), controller_server (odom, cmd_vel, plan),
 #    planner_server, smoother_server, map_saver (map; node name `map_saver`), lifecycle managers
@@ -24,7 +27,7 @@ bt_navigator:
   ros__parameters:
     global_frame: map
     robot_base_frame: base_link
-    odom_topic: odom
+    odom_topic: odom_reliable   # RELIABLE relay of the Create 3 odom (odom_relay_node), see T-10
     bt_loop_duration: 10
     default_server_timeout: 20
     wait_for_service_timeout: 1000
@@ -33,6 +36,7 @@ bt_navigator:
 
 controller_server:
   ros__parameters:
+    odom_topic: odom_reliable   # RELIABLE relay (odom_relay_node): /<ns>/odom is BEST_EFFORT and would not match
     controller_frequency: 20.0
     min_x_velocity_threshold: 0.001
     min_y_velocity_threshold: 0.5

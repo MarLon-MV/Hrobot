@@ -64,6 +64,15 @@ ament_target_dependencies(map_manager_node
   create3_bot_interfaces
 )
 
+# Odometry QoS relay (Create 3 BEST_EFFORT odom -> RELIABLE odom_reliable for Nav2).
+add_executable(odom_relay_node
+  src/odom_relay_node.cpp
+)
+ament_target_dependencies(odom_relay_node
+  rclcpp
+  nav_msgs
+)
+
 install(DIRECTORY include/ DESTINATION include)
 install(TARGETS ${PROJECT_NAME}_lib
   EXPORT export_${PROJECT_NAME}
@@ -71,7 +80,7 @@ install(TARGETS ${PROJECT_NAME}_lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
 )
-install(TARGETS explorer_node map_manager_node
+install(TARGETS explorer_node map_manager_node odom_relay_node
   DESTINATION lib/${PROJECT_NAME}
 )
 

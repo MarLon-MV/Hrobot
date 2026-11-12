@@ -44,17 +44,26 @@ ese grupo, recibiendo `robot_namespace`. Ayudantes comunes en `launch/create3_na
 | Nombre | `robot_namespace:=r2` | `robot_namespace:=''` |
 |---|---|---|
 | LiDAR / mapa / fronteras | `/r2/scan`, `/r2/map`, `/r2/frontiers` | `/scan`, `/map`, `/frontiers` |
-| Create 3 | `/r2/odom`, `/r2/cmd_vel`, `/r2/tf`, `/r2/tf_static` | `/odom`, `/cmd_vel`, `/tf`, `/tf_static` |
+| Create 3 | `/r2/odom` (BEST_EFFORT), `/r2/cmd_vel`, `/r2/tf`, `/r2/tf_static` | `/odom`, `/cmd_vel`, `/tf`, `/tf_static` |
+| Odometria para Nav2 (rele) | `/r2/odom_reliable` | `/odom_reliable` |
 | Exploracion | `/r2/explore_map`, `/r2/save_exploration_map` | `/explore_map`, `/save_exploration_map` |
 | Nav2 | `/r2/navigate_to_pose`, `/r2/map_saver/save_map` | `/navigate_to_pose`, `/map_saver/save_map` |
 | slam_toolbox | `/r2/slam_toolbox/serialize_map` | `/slam_toolbox/serialize_map` |
 | Nodos | `/r2/explorer_node`, `/r2/slam_toolbox`, ... | `/explorer_node`, `/slam_toolbox`, ... |
 
 Lanza: `robot_state_publisher` (xacro de `create3_bot_description`) + driver LD19 (`hardware_base`),
-Nav2 sin amcl/map_server + `map_saver_server` (`navigation`), `slam_toolbox` (`async_slam_toolbox_node`),
+Nav2 sin amcl/map_server + `map_saver_server` + `odom_relay_node` (`navigation`), `slam_toolbox` (`async_slam_toolbox_node`),
 `explorer_node`, `map_manager_node` y `rviz2` con `create3_bot_description/rviz/exploration.rviz`.
 Launch individuales: `hardware_base.launch.py` (`lidar_port`, `lidar_baudrate`) y
-`navigation.launch.py` (`params_file`, `autostart`); ambos aceptan `robot_namespace`.
+`navigation.launch.py` (`params_file`, `explorer_params_file`, `autostart`); ambos aceptan `robot_namespace`.
+
+**Rele de odometria (`odom_relay_node`)**: el Create 3 publica `/r2/odom` BEST_EFFORT (depth 1) y Nav2
+(`controller_server`, `bt_navigator`) suscribe RELIABLE, por lo que no conectan. `navigation.launch.py` lanza
+`odom_relay_node` bajo el mismo namespace y `use_sim_time`; sus parametros salen de la seccion `odom_relay_node:`
+de `explorer_params.yaml` (reescrita con `RewrittenYaml(root_key=<ns>)`) y republica `odom` como `odom_reliable`
+(RELIABLE). `nav2_params.yaml` fija `odom_topic: odom_reliable` en `bt_navigator` y `controller_server`.
+Comprobacion: `ros2 topic info /r2/odom_reliable -v` debe mostrar `RELIABLE`, publicador `odom_relay_node` y como
+suscriptores `controller_server` y `bt_navigator`.
 
 ## Disparar la exploracion
 
@@ -93,7 +102,7 @@ arranca en el dock/pose de origen del mapa; si no, hay que usar `map_start_pose`
 |---|---|
 | `config/slam_params.yaml` | slam_toolbox online_async, `max_laser_range: 12.0` (limite del LD19) |
 | `config/nav2_params.yaml` | Nav2 sin amcl/map_server; RPP (0.25 m/s), NavFn con `allow_unknown`, `robot_radius: 0.18`, `inflation_radius: 0.40` |
-| `config/explorer_params.yaml` | `explorer_node` y `map_manager_node` (doubles con decimales; `save_timeout_sec` 30.0 > 4 x `service_timeout_sec` 5.0) |
+| `config/explorer_params.yaml` | `explorer_node`, `map_manager_node` y `odom_relay_node` (doubles con decimales; `save_timeout_sec` 30.0 > 4 x `service_timeout_sec` 5.0) |
 
 ## Supuestos y pendientes de hardware (no verificado: nada se ha lanzado contra ROS 2)
 
@@ -115,4 +124,5 @@ arranca en el dock/pose de origen del mapa; si no, hay que usar `map_start_pose`
 - Namespace: sin verificar con ROS 2 real: el `RewrittenYaml` con `root_key`, que `slam_toolbox` exponga
   `slam_toolbox/serialize_map` bajo el namespace y que el remapeo de TF de `explorer_node` funcione.
 - Sin verificar con ROS 2 real: que `ReplaceString` -> `RewrittenYaml` encadenen como se asume y que el costmap local reciba `/r2/scan` (ver `ros2 topic info /r2/scan`; no debe aparecer `/r2/local_costmap/scan`). Riesgo abierto: el remapeo relativo `/tf:=tf` en controller_server/planner_server podria resolverse en el namespace anidado de los costmaps (`/r2/local_costmap/tf`); si el costmap no encuentra TF, usar remapeo absoluto `/tf:=/r2/tf`.
+- Sin verificar con ROS 2 real: que `/r2/odom_reliable` conecte con los suscriptores RELIABLE de Nav2 y que el Create 3 siga publicando `/r2/odom` BEST_EFFORT.
 - La QoS de `/r2/scan` del driver (best effort vs reliable) debe ser compatible con slam_toolbox y las capas de costmap.
