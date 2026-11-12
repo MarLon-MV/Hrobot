@@ -1,0 +1,76 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="create3_ld19">
+
+  <!-- Create 3 base geometry -->
+  <xacro:property name="base_radius" value="0.171"/>
+  <xacro:property name="base_height" value="0.072"/>
+  <xacro:property name="base_mass" value="2.7"/>
+
+  <!-- LD19 LiDAR mounting offsets relative to base_link (adjustable) -->
+  <xacro:property name="laser_x" value="0.0"/>
+  <xacro:property name="laser_y" value="0.0"/>
+  <xacro:property name="laser_z" value="0.12"/>
+
+  <!-- LD19 body approximation -->
+  <xacro:property name="laser_radius" value="0.0235"/>
+  <xacro:property name="laser_height" value="0.034"/>
+  <xacro:property name="laser_mass" value="0.047"/>
+
+  <link name="base_link">
+    <visual>
+      <origin xyz="0 0 ${base_height / 2}" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="${base_radius}" length="${base_height}"/>
+      </geometry>
+      <material name="create3_grey">
+        <color rgba="0.75 0.75 0.78 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 ${base_height / 2}" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="${base_radius}" length="${base_height}"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0 0 ${base_height / 2}" rpy="0 0 0"/>
+      <mass value="${base_mass}"/>
+      <inertia ixx="${base_mass * (3 * base_radius * base_radius + base_height * base_height) / 12}"
+               ixy="0.0" ixz="0.0"
+               iyy="${base_mass * (3 * base_radius * base_radius + base_height * base_height) / 12}"
+               iyz="0.0"
+               izz="${base_mass * base_radius * base_radius / 2}"/>
+    </inertial>
+  </link>
+
+  <link name="laser_frame">
+    <visual>
+      <geometry>
+        <cylinder radius="${laser_radius}" length="${laser_height}"/>
+      </geometry>
+      <material name="ld19_black">
+        <color rgba="0.1 0.1 0.1 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="${laser_radius}" length="${laser_height}"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="${laser_mass}"/>
+      <inertia ixx="${laser_mass * (3 * laser_radius * laser_radius + laser_height * laser_height) / 12}"
+               ixy="0.0" ixz="0.0"
+               iyy="${laser_mass * (3 * laser_radius * laser_radius + laser_height * laser_height) / 12}"
+               iyz="0.0"
+               izz="${laser_mass * laser_radius * laser_radius / 2}"/>
+    </inertial>
+  </link>
+
+  <joint name="laser_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="laser_frame"/>
+    <origin xyz="${laser_x} ${laser_y} ${laser_z}" rpy="0 0 0"/>
+  </joint>
+
+</robot>
