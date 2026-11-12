@@ -27,22 +27,22 @@ public:
   explicit GoalEvaluator(const GoalWeights & weights = GoalWeights{},
                          double blacklist_radius = 0.5);
 
-  double score(const Frontier & frontier, double robot_x, double robot_y,
+  [[nodiscard]] double score(const Frontier & frontier, double robot_x, double robot_y,
                double robot_yaw) const;
 
   /// Best non-blacklisted frontier (its `score` field filled in), or nullopt if
   /// none. On equal scores the earliest frontier in `frontiers` wins.
-  std::optional<Frontier> select_best(const std::vector<Frontier> & frontiers,
+  [[nodiscard]] std::optional<Frontier> select_best(const std::vector<Frontier> & frontiers,
                                       double robot_x, double robot_y,
                                       double robot_yaw) const;
 
   void add_to_blacklist(const Point2D & point);
   /// True if `point` is within `blacklist_radius` (inclusive) of a blacklisted point.
-  bool is_blacklisted(const Point2D & point) const;
+  [[nodiscard]] bool is_blacklisted(const Point2D & point) const;
   void clear_blacklist();
 
-  const GoalWeights & weights() const;
-  double blacklist_radius() const;
+  [[nodiscard]] const GoalWeights & weights() const;
+  [[nodiscard]] double blacklist_radius() const;
 
 private:
   GoalWeights weights_;

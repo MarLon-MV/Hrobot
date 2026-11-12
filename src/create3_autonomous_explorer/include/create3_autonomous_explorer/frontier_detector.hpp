@@ -35,9 +35,9 @@ public:
   /// frontier centroid and `robot_position` (stable for equal distances).
   /// Invalid maps (non-positive size, data.size() != width*height) yield {}.
   /// `Frontier::score` is left at 0.
-  std::vector<Frontier> detect(const GridMap & map, const Point2D & robot_position) const;
+  [[nodiscard]] std::vector<Frontier> detect(const GridMap & map, const Point2D & robot_position) const;
 
-  std::size_t min_frontier_size() const;
+  [[nodiscard]] std::size_t min_frontier_size() const;
   void set_min_frontier_size(std::size_t min_frontier_size);
 
 private:
