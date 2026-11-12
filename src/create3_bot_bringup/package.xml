@@ -1,0 +1,40 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>create3_bot_bringup</name>
+  <version>0.1.0</version>
+  <description>Launch files and parameter files (slam_toolbox, Nav2, explorer) for the Create 3 exploration robot.</description>
+  <maintainer email="dev@example.com">create3_bot</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <exec_depend>create3_bot_description</exec_depend>
+  <exec_depend>create3_autonomous_explorer</exec_depend>
+  <exec_depend>create3_bot_interfaces</exec_depend>
+  <exec_depend>slam_toolbox</exec_depend>
+  <exec_depend>nav2_bringup</exec_depend>
+  <exec_depend>nav2_controller</exec_depend>
+  <exec_depend>nav2_planner</exec_depend>
+  <exec_depend>nav2_behaviors</exec_depend>
+  <exec_depend>nav2_bt_navigator</exec_depend>
+  <exec_depend>nav2_smoother</exec_depend>
+  <exec_depend>nav2_lifecycle_manager</exec_depend>
+  <exec_depend>nav2_map_server</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>xacro</exec_depend>
+  <exec_depend>rviz2</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <!--
+    LiDAR LD19 driver. ASSUMPTION: LDRobot's official ROS 2 driver `ldlidar_stl_ros2`
+    (https://github.com/ldrobotSensorTeam/ldlidar_stl_ros2). It is NOT a rosdep key, so it must be
+    cloned into the workspace and built from source; rosdep will not resolve it. If a different
+    driver is used, change the Node in launch/hardware_base.launch.py and this dependency.
+  -->
+  <exec_depend>ldlidar_stl_ros2</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

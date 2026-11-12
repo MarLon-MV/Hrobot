@@ -1,0 +1,41 @@
+# Parameters for explorer_node and map_manager_node (create3_autonomous_explorer).
+# Types must match declare_parameter<T> in the C++ sources: doubles ALWAYS with a decimal point.
+explorer_node:
+  ros__parameters:
+    min_frontier_size: 3          # int
+    weight_size: 1.0
+    weight_distance: 1.0
+    weight_angle: 1.0
+    blacklist_radius: 0.5
+    control_rate_hz: 10.0
+    stuck_timeout_sec: 15.0
+    progress_epsilon: 0.1
+    recovery_rotation_sec: 4.0
+    recovery_angular_speed: 0.5
+    max_recovery_attempts: 3      # int
+    detection_period_sec: 1.0
+    free_threshold: 25.0          # OccupancyGrid value (0-100), double
+    map_frame: map
+    base_frame: base_link
+    map_topic: /map
+    frontiers_topic: /frontiers
+    cmd_vel_topic: cmd_vel        # relative: resolves under the Create 3 namespace if one is used
+    navigate_action: navigate_to_pose
+    save_map_service: save_exploration_map
+    save_map_on_finish: true
+    map_name: exploration_map
+    # Must be > 4 * map_manager_node.service_timeout_sec (= 20.0 s worst case with 5.0).
+    save_timeout_sec: 30.0
+
+map_manager_node:
+  ros__parameters:
+    maps_dir: "~/.create3_maps"   # overridden by the launch argument maps_dir
+    map_saver_service: /map_saver/save_map
+    serialize_service: /slam_toolbox/serialize_map
+    service_timeout_sec: 5.0
+    occupied_thresh: 0.65
+    free_thresh: 0.25
+    image_format: pgm
+    map_mode: trinary
+    map_topic: map
+    save_service_name: save_exploration_map
