@@ -1,0 +1,13 @@
+# Goal
+bool start_exploration
+float32 max_duration_sec
+---
+# Result
+bool success
+uint32 frontiers_explored
+string map_path
+---
+# Feedback
+string current_state
+uint32 remaining_frontiers
+float32 distance_traveled
