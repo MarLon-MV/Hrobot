@@ -22,3 +22,6 @@ log/
 # Secretos
 .env
 *.pem
+.cache/
+*.swp
+compile_commands.json
