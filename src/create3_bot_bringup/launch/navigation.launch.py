@@ -6,7 +6,8 @@ already limits acceleration, and the Create 3 applies its own safety limits).
 
 Namespace: the nodes are put under `robot_namespace` here (applied once; callers must not wrap this
 launch in another namespace), the YAML is rewritten with RewrittenYaml(root_key=<ns>) and TF is
-remapped to <ns>/tf and <ns>/tf_static. Empty robot_namespace = no namespace, YAML untouched.
+remapped to <ns>/tf and <ns>/tf_static. Empty robot_namespace = no namespace, no RewrittenYaml (the markers '/<robot_namespace>' of the
+costmap topics are still substituted: '/scan', '/map').
 """
 
 import os
@@ -24,6 +25,7 @@ from create3_namespace import (  # noqa: E402
     resolve_namespace,
     rewrite_yaml,
     robot_namespace_argument,
+    substitute_namespace_markers,
     tf_remappings,
 )
 
@@ -33,7 +35,11 @@ def _setup(context, *args, **kwargs):
     use_sim_time = LaunchConfiguration("use_sim_time")
     autostart = LaunchConfiguration("autostart")
     # With a namespace, keys like `controller_server:` are wrapped under `<ns>:`.
-    params_file = rewrite_yaml(LaunchConfiguration("params_file"), namespace)
+    # Order matters: first '/<robot_namespace>' -> '/<ns>' ('' if none) in the costmap topics (nested
+    # nodes need absolute names), then RewrittenYaml wraps the (temporary) result under <ns>.
+    params_file = rewrite_yaml(
+        substitute_namespace_markers(LaunchConfiguration("params_file"), namespace), namespace
+    )
 
     # The params file first, then use_sim_time override (a later dict wins).
     # Costmaps are sub-nodes of controller_server/planner_server and read use_sim_time from them.

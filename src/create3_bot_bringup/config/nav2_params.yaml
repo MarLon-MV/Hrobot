@@ -2,8 +2,23 @@
 # NO amcl and NO map_server: slam_toolbox provides map and the map->odom transform.
 # Only the navigation servers are launched (see launch/navigation.launch.py).
 # Odometry and the odom->base_link TF come from the Create 3 (odom, tf); commands go to cmd_vel.
-# ALL names here are relative: they resolve under the robot namespace (e.g. /r2/odom, /r2/cmd_vel).
+# Names of the nav2 servers are relative: they resolve under the robot namespace (/r2/odom, /r2/cmd_vel).
 # launch/navigation.launch.py rewrites this file with RewrittenYaml(root_key=<ns>) when a namespace is set.
+#
+# NAME AUDIT (which namespace each relative name resolves in):
+#  * The costmaps are NESTED nodes: /<ns>/local_costmap/local_costmap and
+#    /<ns>/global_costmap/global_costmap, with node namespace /<ns>/local_costmap (/<ns>/global_costmap).
+#    A relative name read inside them (observation `scan.topic`, static_layer `map_topic`) resolves to
+#    /<ns>/local_costmap/scan (wrong: the LiDAR is /<ns>/scan). They are therefore ABSOLUTE below, with
+#    the marker "/<robot_namespace>/..." that navigation.launch.py replaces textually
+#    (ReplaceString, before RewrittenYaml) by "/r2/..." or, with an empty namespace, by "/...".
+#  * Correct as relative (resolve in the node namespace /<ns>): bt_navigator.odom_topic, behavior_server
+#    local/global_costmap_topic and *_footprint_topic ("local_costmap/costmap_raw" -> /<ns>/local_costmap/
+#    costmap_raw, which is where the nested costmap publishes it), controller_server (odom, cmd_vel, plan),
+#    planner_server, smoother_server, map_saver (map; node name `map_saver`), lifecycle managers
+#    (node_names, relative to their namespace). slam_params.yaml: scan_topic is relative and slam_toolbox
+#    is NOT nested (/<ns>/slam_toolbox, namespace /<ns>) -> /<ns>/scan, /<ns>/map: OK.
+#  * Costmap footprint_topic is left at its default (unused: robot_radius is set, nobody publishes it).
 
 bt_navigator:
   ros__parameters:
@@ -89,7 +104,7 @@ local_costmap:
         enabled: true
         observation_sources: scan
         scan:
-          topic: scan
+          topic: "/<robot_namespace>/scan"
           sensor_frame: laser_frame
           data_type: "LaserScan"
           marking: true
@@ -119,6 +134,7 @@ global_costmap:
       plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
+        map_topic: "/<robot_namespace>/map"   # absolute: nested node (see NAME AUDIT)
         map_subscribe_transient_local: true
         subscribe_to_updates: true
       obstacle_layer:
@@ -126,7 +142,7 @@ global_costmap:
         enabled: true
         observation_sources: scan
         scan:
-          topic: scan
+          topic: "/<robot_namespace>/scan"
           sensor_frame: laser_frame
           data_type: "LaserScan"
           marking: true

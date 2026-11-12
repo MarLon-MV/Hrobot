@@ -30,7 +30,14 @@ ese grupo, recibiendo `robot_namespace`. Ayudantes comunes en `launch/create3_na
   (`/tf:=/r2/tf`) porque su `tf2_ros::TransformListener` crea un nodo interno en el namespace raiz que solo ve
   remapeos globales. Los `frame_id` no llevan prefijo.
 - **YAML**: con namespace se reescriben al arrancar con `nav2_common` `RewrittenYaml(root_key=<ns>)`
-  (nav2, slam, explorer); sin namespace se usan tal cual. Todos los topics/servicios de los YAML son relativos.
+  (nav2, slam, explorer); sin namespace se usan tal cual. Los topics/servicios de los YAML son relativos, **salvo los de los costmaps**
+  (ver abajo).
+- **Costmaps de Nav2**: son nodos anidados (`/r2/local_costmap/local_costmap`, namespace `/r2/local_costmap`), asi que un
+  `topic: scan` relativo daria `/r2/local_costmap/scan` en vez de `/r2/scan` (el costmap local no veia el LiDAR).
+  En `nav2_params.yaml` los topics de los costmaps (`scan.topic` de ambos `obstacle_layer`, `static_layer.map_topic`) son
+  absolutos con el marcador `/<robot_namespace>/...`, que `navigation.launch.py` sustituye con `ReplaceString` (helper
+  `substitute_namespace_markers`) **antes** de `RewrittenYaml`: `/r2/scan`, `/r2/map` o, sin namespace, `/scan`, `/map`.
+  La auditoria de nombres relativos esta en el comentario inicial de `nav2_params.yaml`.
 - **RViz**: `exploration.rviz` usa `/<robot_namespace>/...`; `ReplaceString` lo sustituye por `/r2/...` o,
   sin namespace, por `/...` (sin barra doble).
 
@@ -107,4 +114,5 @@ arranca en el dock/pose de origen del mapa; si no, hay que usar `map_start_pose`
   los logs de `controller_server`/`bt_navigator`. Sin `velocity_smoother`: `cmd_vel` (`/r2/cmd_vel`) directo.
 - Namespace: sin verificar con ROS 2 real: el `RewrittenYaml` con `root_key`, que `slam_toolbox` exponga
   `slam_toolbox/serialize_map` bajo el namespace y que el remapeo de TF de `explorer_node` funcione.
+- Sin verificar con ROS 2 real: que `ReplaceString` -> `RewrittenYaml` encadenen como se asume y que el costmap local reciba `/r2/scan` (ver `ros2 topic info /r2/scan`; no debe aparecer `/r2/local_costmap/scan`). Riesgo abierto: el remapeo relativo `/tf:=tf` en controller_server/planner_server podria resolverse en el namespace anidado de los costmaps (`/r2/local_costmap/tf`); si el costmap no encuentra TF, usar remapeo absoluto `/tf:=/r2/tf`.
 - La QoS de `/r2/scan` del driver (best effort vs reliable) debe ser compatible con slam_toolbox y las capas de costmap.

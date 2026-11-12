@@ -79,3 +79,20 @@ def rewrite_yaml(yaml_path, namespace):
     return RewrittenYaml(
         source_file=yaml_path, root_key=namespace, param_rewrites={}, convert_types=True
     )
+
+
+def substitute_namespace_markers(source_file, namespace):
+    """ReplaceString substitution that turns '/<robot_namespace>' into '/<ns>' ('' if no namespace).
+
+    Same pattern as RViz in master_explore. Used for nav2_params.yaml, whose costmap topics must be
+    absolute (nested costmap nodes). It ALWAYS returns a ReplaceString (also with namespace '', so the
+    marker becomes '' and '/<robot_namespace>/scan' -> '/scan', never '//scan'). Chain it BEFORE
+    rewrite_yaml: ReplaceString.perform() writes a temporary file and returns its path, and
+    RewrittenYaml(source_file=<substitution>) performs its source_file substitution, so it reads that file.
+    """
+    from nav2_common.launch import ReplaceString
+
+    return ReplaceString(
+        source_file=source_file,
+        replacements={"/<robot_namespace>": f"/{namespace}" if namespace else ""},
+    )
