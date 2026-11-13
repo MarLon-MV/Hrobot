@@ -93,7 +93,8 @@ scripts/setup_pi.sh            # herramientas, driver LD19, permisos, rosdep y c
 source install/setup.bash
 ```
 
-Opciones: `--skip-udev`, `--skip-build`; variables `LDLIDAR_REF` (rama/tag/commit del driver,
+Opciones: `--skip-udev` (omite grupo `dialout` y regla udev; no habrá `/dev/ldlidar`, usa `lidar_port:=/dev/ttyUSB0`),
+`--skip-build`, `--skip-net` (no toca `ROS_DOMAIN_ID`/RMW), `--domain-id N`, `--rmw <nombre>`; variables `LDLIDAR_REF` (rama/tag/commit del driver,
 por defecto `master`), `JOBS` (workers de colcon, por defecto 2) y `LDLIDAR_REPO`. Es idempotente.
 Más detalle en [`scripts/setup_pi.sh`](../scripts/setup_pi.sh).
 

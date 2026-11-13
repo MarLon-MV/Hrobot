@@ -16,6 +16,9 @@
 #
 # Uso:  scripts/setup_pi.sh [--skip-udev] [--skip-build] [--force-driver] [--skip-net]
 #                           [--domain-id N] [--rmw rmw_fastrtps_cpp|rmw_cyclonedds_cpp]
+#   --skip-udev     no añade tu usuario a dialout ni instala la regla udev (no existirá /dev/ldlidar:
+#                   pasa el puerto real, p. ej. lidar_port:=/dev/ttyUSB0)
+#   --skip-build    no ejecuta colcon build
 #   --force-driver  clona y compila el driver aquí aunque ya exista uno en el entorno
 #   --skip-net      no toca ROS_DOMAIN_ID / RMW_IMPLEMENTATION
 #   --domain-id N   dominio ROS (def: $ROS_DOMAIN_ID si existe, si no 0)
@@ -57,7 +60,7 @@ while [ $# -gt 0 ]; do
     --skip-net) SKIP_NET=1 ;;
     --domain-id) [ $# -gt 0 ] || { echo "--domain-id requiere un valor" >&2; exit 2; }; DOMAIN_ID="$1"; shift ;;
     --rmw) [ $# -gt 0 ] || { echo "--rmw requiere un valor" >&2; exit 2; }; RMW_NAME="$1"; shift ;;
-    -h|--help) sed -n '2,30p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,33p' "$0"; exit 0 ;;
     *) echo "Argumento desconocido: $arg (usa --help)" >&2; exit 2 ;;
   esac
 done
