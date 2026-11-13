@@ -10,10 +10,16 @@
 #   3. Driver del LD19 (rosdep no lo resuelve): si ya hay un `ldlidar_stl_ros2` disponible en el entorno
 #      (otro workspace ya compilado y cargado), lo reutiliza; si no, lo clona en src/ldlidar_stl_ros2.
 #   4. Permisos del puerto serie: grupo dialout + regla udev con symlink /dev/ldlidar.
-#   5. Instala dependencias con rosdep y compila con colcon.
+#   5. Red ROS 2: fija ROS_DOMAIN_ID y RMW_IMPLEMENTATION (deben coincidir con los del Create 3),
+#      los guarda en ~/.config/create3_bot/ros_net.env y los carga desde ~/.bashrc (bloque marcado, una vez).
+#   6. Instala dependencias con rosdep y compila con colcon.
 #
-# Uso:  scripts/setup_pi.sh [--skip-udev] [--skip-build] [--force-driver]
+# Uso:  scripts/setup_pi.sh [--skip-udev] [--skip-build] [--force-driver] [--skip-net]
+#                           [--domain-id N] [--rmw rmw_fastrtps_cpp|rmw_cyclonedds_cpp]
 #   --force-driver  clona y compila el driver aquí aunque ya exista uno en el entorno
+#   --skip-net      no toca ROS_DOMAIN_ID / RMW_IMPLEMENTATION
+#   --domain-id N   dominio ROS (def: $ROS_DOMAIN_ID si existe, si no 0)
+#   --rmw NAME      middleware (def: $RMW_IMPLEMENTATION si existe, si no rmw_fastrtps_cpp)
 # Variables opcionales:
 #   LDLIDAR_REPO   repositorio del driver   (def: repo oficial de LDRobot)
 #   LDLIDAR_REF    rama, tag o commit       (def: master; fíjalo a un commit cuando el build funcione)
@@ -30,21 +36,40 @@ UDEV_RULE="/etc/udev/rules.d/99-ldlidar.rules"
 # CP2102 (USB-serie habitual del LD19). Verifícalo con `lsusb` y ajusta si tu adaptador es otro.
 UDEV_CONTENT='SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", SYMLINK+="ldlidar", GROUP="dialout", MODE="0660"'
 
+NET_DIR="${HOME}/.config/create3_bot"
+NET_FILE="${NET_DIR}/ros_net.env"
+BASHRC="${HOME}/.bashrc"
+NET_BEGIN="# >>> create3_bot ros_net >>>"
+NET_END="# <<< create3_bot ros_net <<<"
+DOMAIN_ID="${ROS_DOMAIN_ID:-0}"
+RMW_NAME="${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}"
+
 SKIP_UDEV=0
 SKIP_BUILD=0
 FORCE_DRIVER=0
-for arg in "$@"; do
+SKIP_NET=0
+while [ $# -gt 0 ]; do
+  arg="$1"; shift
   case "$arg" in
     --skip-udev) SKIP_UDEV=1 ;;
     --skip-build) SKIP_BUILD=1 ;;
     --force-driver) FORCE_DRIVER=1 ;;
-    -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
+    --skip-net) SKIP_NET=1 ;;
+    --domain-id) [ $# -gt 0 ] || { echo "--domain-id requiere un valor" >&2; exit 2; }; DOMAIN_ID="$1"; shift ;;
+    --rmw) [ $# -gt 0 ] || { echo "--rmw requiere un valor" >&2; exit 2; }; RMW_NAME="$1"; shift ;;
+    -h|--help) sed -n '2,30p' "$0"; exit 0 ;;
     *) echo "Argumento desconocido: $arg (usa --help)" >&2; exit 2 ;;
   esac
 done
 
 log() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
 die() { printf '\033[1;31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
+
+[[ "${DOMAIN_ID}" =~ ^[0-9]+$ ]] && [ "${DOMAIN_ID}" -le 232 ] || { echo "ROS_DOMAIN_ID invalido: ${DOMAIN_ID} (0-232)" >&2; exit 2; }
+case "${RMW_NAME}" in
+  rmw_fastrtps_cpp|rmw_cyclonedds_cpp) ;;
+  *) echo "RMW no soportado: ${RMW_NAME} (usa rmw_fastrtps_cpp o rmw_cyclonedds_cpp)" >&2; exit 2 ;;
+esac
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
@@ -68,6 +93,30 @@ set +u
 # shellcheck disable=SC1090
 source "/opt/ros/${ROS_DISTRO_NAME}/setup.bash"
 set -u
+
+if [ "${SKIP_NET}" -eq 0 ]; then
+  log "Red ROS 2 (ROS_DOMAIN_ID=${DOMAIN_ID}, RMW_IMPLEMENTATION=${RMW_NAME})"
+  # Instala el middleware elegido (rmw_fastrtps_cpp ya viene con ros-base; cyclonedds no siempre).
+  sudo apt-get install -y "ros-${ROS_DISTRO_NAME}-${RMW_NAME//_/-}"
+  mkdir -p "${NET_DIR}"
+  printf 'export ROS_DOMAIN_ID=%s\nexport RMW_IMPLEMENTATION=%s\n' "${DOMAIN_ID}" "${RMW_NAME}" > "${NET_FILE}"
+  touch "${BASHRC}"
+  if ! grep -qxF "${NET_BEGIN}" "${BASHRC}"; then
+    if [ -s "${BASHRC}" ] && [ -n "$(tail -c 1 "${BASHRC}")" ]; then printf '\n' >> "${BASHRC}"; fi
+    {
+      echo "${NET_BEGIN}"
+      echo "[ -f \"${NET_FILE}\" ] && . \"${NET_FILE}\""
+      echo "${NET_END}"
+    } >> "${BASHRC}"
+  fi
+  # Aplicar también a este proceso (build/rosdep) y avisar para el robot.
+  export ROS_DOMAIN_ID="${DOMAIN_ID}" RMW_IMPLEMENTATION="${RMW_NAME}"
+  echo "Guardado en ${NET_FILE}. Abre una terminal nueva (o 'source ~/.bashrc')."
+  echo "IMPORTANTE: el Create 3 debe usar el mismo RMW (interfaz web > Application > ROS 2) y su ROS_DOMAIN_ID"
+  echo "debe ser ${DOMAIN_ID}. Reinicia la aplicación del Create 3 tras cambiarlos."
+else
+  log "Omitiendo configuración de red ROS (--skip-net)"
+fi
 
 LD_DIR="src/ldlidar_stl_ros2"
 USE_EXISTING_DRIVER=0
@@ -136,6 +185,7 @@ cat <<EOF
 Siguientes pasos:
   source ${REPO_ROOT}/install/setup.bash
   ls -l /dev/ldlidar            # o /dev/ttyUSB0 si no usas la regla udev
+  echo \$ROS_DOMAIN_ID \$RMW_IMPLEMENTATION   # ${ROS_DOMAIN_ID-?} ${RMW_IMPLEMENTATION-?}; deben coincidir con el Create 3
   scripts/set_robot.sh r2       # opcional: fija el namespace del robot (por defecto r2; no cambia el del Create 3)
   scripts/set_robot.sh --check  # comprueba que existen /<namespace>/odom y /<namespace>/cmd_vel
   ros2 launch create3_bot_bringup master_explore.launch.py lidar_port:=/dev/ldlidar
