@@ -69,6 +69,14 @@ def _setup(context, *args, **kwargs):
         os.path.join(bringup_share, "config", "explorer_params.yaml"), namespace
     )
     tf_remaps = tf_remappings(namespace)
+    # slam_toolbox publishes the absolute topics /map and /map_metadata, so PushRosNamespace does
+    # not move them under the robot namespace. Remap them to /<ns>/map for Nav2 and the explorer.
+    slam_remaps = list(tf_remaps)
+    if namespace:
+        slam_remaps += [
+            ("/map", f"/{namespace}/map"),
+            ("/map_metadata", f"/{namespace}/map_metadata"),
+        ]
 
     slam_params = [slam_yaml, {"use_sim_time": use_sim_time}]
     actions = []
@@ -114,7 +122,7 @@ def _setup(context, *args, **kwargs):
             namespace="",  # the namespace comes from PushRosNamespace (LifecycleNode needs a str)
             output="screen",
             parameters=slam_params,
-            remappings=tf_remaps,
+            remappings=slam_remaps,
         )
         actions.append(slam_node)
         actions.append(
@@ -151,7 +159,7 @@ def _setup(context, *args, **kwargs):
                 name="slam_toolbox",
                 output="screen",
                 parameters=slam_params,
-                remappings=tf_remaps,
+                remappings=slam_remaps,
             )
         )
 
