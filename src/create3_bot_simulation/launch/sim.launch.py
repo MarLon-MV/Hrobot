@@ -13,7 +13,7 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, SetEnvironmentVariable
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import (
@@ -115,6 +115,11 @@ def generate_launch_description():
             DeclareLaunchArgument("x", default_value="0.0"),
             DeclareLaunchArgument("y", default_value="0.0"),
             DeclareLaunchArgument("yaw", default_value="0.0"),
+            # Gazebo resolves package://create3_bot_description/meshes/... through this path.
+            SetEnvironmentVariable(
+                "GZ_SIM_RESOURCE_PATH",
+                [os.path.dirname(description_share), ":", os.environ.get("GZ_SIM_RESOURCE_PATH", "")],
+            ),
             slam,  # first: it validates map:= before any process starts
             gz_gui,
             gz_headless,
