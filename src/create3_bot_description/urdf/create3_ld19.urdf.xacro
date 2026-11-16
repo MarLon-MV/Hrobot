@@ -17,12 +17,20 @@
   <xacro:property name="laser_z" value="0.12"/>
 
   <!-- Create 3 drive geometry (used only in simulation) -->
-  <xacro:property name="wheel_radius" value="0.036"/>
-  <xacro:property name="wheel_width" value="0.02"/>
+  <xacro:property name="wheel_radius" value="0.03575"/>
+  <xacro:property name="wheel_width" value="0.015"/>
   <xacro:property name="wheel_separation" value="0.233"/>
   <xacro:property name="wheel_mass" value="0.2"/>
-  <xacro:property name="caster_radius" value="0.02"/>
-  <xacro:property name="caster_x" value="0.13"/>
+  <xacro:property name="caster_radius" value="0.01"/>
+  <xacro:property name="caster_x" value="0.125"/>
+  <!-- Centre of mass shifted forward (iRobot ignition model: 2.28 cm) so the robot stays level
+       with a single front caster. -->
+  <xacro:property name="cog_x" value="0.0228"/>
+
+  <!-- Visual meshes from iRobotEducation/create3_sim (jazzy, BSD-3, see meshes/LICENSE.irobot).
+       Their z offset (0.0392) is relative to a base_link 4.45 mm below the floor; here base_link
+       sits on the floor (wheel axis at z = wheel_radius), hence 0.0392 - 0.00445. -->
+  <xacro:property name="mesh_z" value="0.03475"/>
 
   <!-- LD19 body approximation -->
   <xacro:property name="laser_radius" value="0.0235"/>
@@ -31,13 +39,16 @@
 
   <link name="base_link">
     <visual>
-      <origin xyz="0 0 ${base_height / 2}" rpy="0 0 0"/>
+      <origin xyz="0 0 ${mesh_z}" rpy="0 0 ${pi / 2}"/>
       <geometry>
-        <cylinder radius="${base_radius}" length="${base_height}"/>
+        <mesh filename="package://create3_bot_description/meshes/body_visual.dae"/>
       </geometry>
-      <material name="create3_grey">
-        <color rgba="0.75 0.75 0.78 1.0"/>
-      </material>
+    </visual>
+    <visual>
+      <origin xyz="0 0 ${mesh_z}" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://create3_bot_description/meshes/bumper_visual.dae"/>
+      </geometry>
     </visual>
     <!-- Bottom lifted to 0.025 m so the body never drags on the floor in simulation. -->
     <collision>
@@ -47,7 +58,7 @@
       </geometry>
     </collision>
     <inertial>
-      <origin xyz="0 0 ${base_height / 2}" rpy="0 0 0"/>
+      <origin xyz="${cog_x} 0 ${base_height / 2}" rpy="0 0 0"/>
       <mass value="${base_mass}"/>
       <inertia ixx="${base_mass * (3 * base_radius * base_radius + base_height * base_height) / 12}"
                ixy="0.0" ixz="0.0"
@@ -121,7 +132,7 @@
     <xacro:wheel name="left" y="${wheel_separation / 2}"/>
     <xacro:wheel name="right" y="${-wheel_separation / 2}"/>
 
-    <!-- Frictionless ball casters at the front and rear (mu = 0 in the gazebo block below). -->
+    <!-- Frictionless ball caster at the front only, like the real Create 3 (mu = 0 below). -->
     <xacro:macro name="caster" params="name x">
       <link name="${name}_caster">
         <collision>
@@ -147,7 +158,6 @@
     </xacro:macro>
 
     <xacro:caster name="front" x="${caster_x}"/>
-    <xacro:caster name="rear" x="${-caster_x}"/>
 
     <gazebo>
       <plugin filename="gz-sim-diff-drive-system" name="gz::sim::systems::DiffDrive">
