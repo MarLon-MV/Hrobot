@@ -1,6 +1,11 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="create3_ld19">
 
+  <!-- sim:=true adds wheels, casters and the Gazebo (gz-sim, Harmonic) plugins: diff drive,
+       joint states and the LD19 as a gpu_lidar. With sim:=false (real robot) the model is just
+       base_link + laser_frame: odom/TF come from the Create 3 itself. -->
+  <xacro:arg name="sim" default="false"/>
+
   <!-- Create 3 base geometry -->
   <xacro:property name="base_radius" value="0.171"/>
   <xacro:property name="base_height" value="0.072"/>
@@ -10,6 +15,14 @@
   <xacro:property name="laser_x" value="0.0"/>
   <xacro:property name="laser_y" value="0.0"/>
   <xacro:property name="laser_z" value="0.12"/>
+
+  <!-- Create 3 drive geometry (used only in simulation) -->
+  <xacro:property name="wheel_radius" value="0.036"/>
+  <xacro:property name="wheel_width" value="0.02"/>
+  <xacro:property name="wheel_separation" value="0.233"/>
+  <xacro:property name="wheel_mass" value="0.2"/>
+  <xacro:property name="caster_radius" value="0.02"/>
+  <xacro:property name="caster_x" value="0.13"/>
 
   <!-- LD19 body approximation -->
   <xacro:property name="laser_radius" value="0.0235"/>
@@ -26,10 +39,11 @@
         <color rgba="0.75 0.75 0.78 1.0"/>
       </material>
     </visual>
+    <!-- Bottom lifted to 0.025 m so the body never drags on the floor in simulation. -->
     <collision>
-      <origin xyz="0 0 ${base_height / 2}" rpy="0 0 0"/>
+      <origin xyz="0 0 ${(base_height + 0.025) / 2}" rpy="0 0 0"/>
       <geometry>
-        <cylinder radius="${base_radius}" length="${base_height}"/>
+        <cylinder radius="${base_radius}" length="${base_height - 0.025}"/>
       </geometry>
     </collision>
     <inertial>
@@ -72,5 +86,121 @@
     <child link="laser_frame"/>
     <origin xyz="${laser_x} ${laser_y} ${laser_z}" rpy="0 0 0"/>
   </joint>
+
+  <xacro:if value="$(arg sim)">
+
+    <xacro:macro name="wheel" params="name y">
+      <link name="${name}_wheel">
+        <visual>
+          <origin xyz="0 0 0" rpy="${pi / 2} 0 0"/>
+          <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
+          <material name="wheel_dark"><color rgba="0.15 0.15 0.15 1.0"/></material>
+        </visual>
+        <collision>
+          <origin xyz="0 0 0" rpy="${pi / 2} 0 0"/>
+          <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
+        </collision>
+        <inertial>
+          <origin xyz="0 0 0" rpy="${pi / 2} 0 0"/>
+          <mass value="${wheel_mass}"/>
+          <inertia ixx="${wheel_mass * (3 * wheel_radius * wheel_radius + wheel_width * wheel_width) / 12}"
+                   ixy="0.0" ixz="0.0"
+                   iyy="${wheel_mass * (3 * wheel_radius * wheel_radius + wheel_width * wheel_width) / 12}"
+                   iyz="0.0"
+                   izz="${wheel_mass * wheel_radius * wheel_radius / 2}"/>
+        </inertial>
+      </link>
+      <joint name="${name}_wheel_joint" type="continuous">
+        <parent link="base_link"/>
+        <child link="${name}_wheel"/>
+        <origin xyz="0 ${y} ${wheel_radius}" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+      </joint>
+    </xacro:macro>
+
+    <xacro:wheel name="left" y="${wheel_separation / 2}"/>
+    <xacro:wheel name="right" y="${-wheel_separation / 2}"/>
+
+    <!-- Frictionless ball casters at the front and rear (mu = 0 in the gazebo block below). -->
+    <xacro:macro name="caster" params="name x">
+      <link name="${name}_caster">
+        <collision>
+          <geometry><sphere radius="${caster_radius}"/></geometry>
+        </collision>
+        <inertial>
+          <mass value="0.05"/>
+          <inertia ixx="0.00001" ixy="0.0" ixz="0.0" iyy="0.00001" iyz="0.0" izz="0.00001"/>
+        </inertial>
+      </link>
+      <joint name="${name}_caster_joint" type="fixed">
+        <parent link="base_link"/>
+        <child link="${name}_caster"/>
+        <origin xyz="${x} 0 ${caster_radius}" rpy="0 0 0"/>
+      </joint>
+      <gazebo reference="${name}_caster">
+        <mu1>0.0</mu1>
+        <mu2>0.0</mu2>
+        <surface>
+          <friction><ode><mu>0.0</mu><mu2>0.0</mu2></ode></friction>
+        </surface>
+      </gazebo>
+    </xacro:macro>
+
+    <xacro:caster name="front" x="${caster_x}"/>
+    <xacro:caster name="rear" x="${-caster_x}"/>
+
+    <gazebo>
+      <plugin filename="gz-sim-diff-drive-system" name="gz::sim::systems::DiffDrive">
+        <left_joint>left_wheel_joint</left_joint>
+        <right_joint>right_wheel_joint</right_joint>
+        <wheel_separation>${wheel_separation}</wheel_separation>
+        <wheel_radius>${wheel_radius}</wheel_radius>
+        <topic>cmd_vel</topic>
+        <odom_topic>odom</odom_topic>
+        <tf_topic>tf</tf_topic>
+        <frame_id>odom</frame_id>
+        <child_frame_id>base_link</child_frame_id>
+        <odom_publish_frequency>30</odom_publish_frequency>
+        <max_linear_acceleration>1.0</max_linear_acceleration>
+        <max_angular_acceleration>2.0</max_angular_acceleration>
+      </plugin>
+      <plugin filename="gz-sim-joint-state-publisher-system"
+              name="gz::sim::systems::JointStatePublisher">
+        <topic>joint_states</topic>
+      </plugin>
+    </gazebo>
+
+    <!-- LD19: 360 deg, ~450 samples at 10 Hz, 0.02-12 m (datasheet). -->
+    <gazebo reference="laser_frame">
+      <sensor name="ld19" type="gpu_lidar">
+        <gz_frame_id>laser_frame</gz_frame_id>
+        <topic>scan</topic>
+        <update_rate>10</update_rate>
+        <always_on>true</always_on>
+        <visualize>false</visualize>
+        <lidar>
+          <scan>
+            <horizontal>
+              <samples>450</samples>
+              <resolution>1</resolution>
+              <min_angle>-3.14159</min_angle>
+              <max_angle>3.14159</max_angle>
+            </horizontal>
+          </scan>
+          <range>
+            <min>0.02</min>
+            <max>12.0</max>
+            <resolution>0.015</resolution>
+          </range>
+          <noise>
+            <type>gaussian</type>
+            <mean>0.0</mean>
+            <stddev>0.01</stddev>
+          </noise>
+        </lidar>
+      </sensor>
+    </gazebo>
+
+  </xacro:if>
 
 </robot>
