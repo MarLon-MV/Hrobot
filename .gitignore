@@ -17,3 +17,7 @@ compile_commands.json
 src/ldlidar_stl_ros2/
 __pycache__/
 *.pyc
+
+# Mapas guardados (solo se versiona la carpeta)
+maps/*
+!maps/.gitkeep

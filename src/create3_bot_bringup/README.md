@@ -45,14 +45,15 @@ envuelve los `include` (nunca `/r2/r2/...`).
 Con slam_toolbox corriendo (ajusta el namespace; los nombres son rutas en la máquina donde corre slam_toolbox):
 
 ```bash
-mkdir -p ~/.create3_maps
+# Desde la raíz del workspace; los mapas quedan en <workspace>/maps
+WS=$PWD
 # Pose graph (permite ampliar el mapa después): genera sala1.posegraph y sala1.data
-ros2 service call /r2/slam_toolbox/serialize_map slam_toolbox/srv/SerializePoseGraph "{filename: '/home/<usuario>/.create3_maps/sala1'}"
+ros2 service call /r2/slam_toolbox/serialize_map slam_toolbox/srv/SerializePoseGraph "{filename: '$WS/maps/sala1'}"
 # Imagen .pgm/.yaml (para usar con otras herramientas)
-ros2 service call /r2/slam_toolbox/save_map slam_toolbox/srv/SaveMap "{name: {data: '/home/<usuario>/.create3_maps/sala1'}}"
+ros2 service call /r2/slam_toolbox/save_map slam_toolbox/srv/SaveMap "{name: {data: '$WS/maps/sala1'}}"
 
 # Ampliar un mapa guardado (el robot debe arrancar en el dock/origen del mapa)
-ros2 launch create3_bot_bringup mapping.launch.py map:=sala1
+ros2 launch create3_bot_bringup mapping.launch.py map:=sala1 maps_dir:=$WS/maps
 ```
 
 Con `map:=<nombre>` slam_toolbox carga `<maps_dir>/<nombre>.posegraph` (`map_start_at_dock: true`, modo mapping). Si el
