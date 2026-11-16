@@ -1,4 +1,4 @@
-# Topics use the "/<robot_namespace>" placeholder: master_explore.launch.py replaces it with
+# Topics use the "/<robot_namespace>" placeholder: slam.launch.py replaces it with
 # "/<ns>" (e.g. /r2) or with "" when there is no namespace (nav2_common ReplaceString).
 Panels:
   - Class: rviz_common/Displays
@@ -87,31 +87,6 @@ Visualization Manager:
         Value: /<robot_namespace>/scan
       Use Fixed Frame: true
       Value: true
-    - Class: rviz_default_plugins/Path
-      Name: Path
-      Enabled: true
-      Alpha: 1
-      Color: 25; 255; 0
-      Line Style: Lines
-      Line Width: 0.03
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /<robot_namespace>/plan
-      Value: true
-    - Class: rviz_default_plugins/MarkerArray
-      Name: Frontiers
-      Enabled: true
-      Namespaces: {}
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /<robot_namespace>/frontiers
-      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -127,17 +102,10 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /<robot_namespace>/initialpose
-    - Class: rviz_default_plugins/SetGoal
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /<robot_namespace>/goal_pose
   Value: true
   Views:
     Current:
-      Class: rviz_default_plugins/TopDownOrthographic
+      Class: rviz_default_plugins/TopDownOrtho
       Name: Current View
       Scale: 60
       Target Frame: <Fixed Frame>

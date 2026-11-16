@@ -6,8 +6,8 @@ sys.path and import it.
 NAMESPACE DESIGN (single application, no /r2/r2/...):
   * Every launch file declares `robot_namespace` and applies the namespace ITSELF, only to the
     nodes it creates directly (GroupAction + PushRosNamespace, see `namespaced`).
-  * master_explore does NOT wrap its IncludeLaunchDescription actions in its group: it forwards
-    `robot_namespace` to hardware_base and navigation, which push the namespace on their own.
+  * mapping does NOT wrap its IncludeLaunchDescription actions in a group: it forwards
+    `robot_namespace` to hardware_base and slam, which push the namespace on their own.
     Wrapping the includes too would apply the namespace twice.
   * Empty namespace = no PushRosNamespace at all and YAMLs are used untouched (simulation).
 """
@@ -60,7 +60,7 @@ def tf_remappings(namespace, absolute=False):
     """TF remaps so nodes use <ns>/tf and <ns>/tf_static (the Create 3 publishes them there).
 
     Relative targets (nav2_bringup pattern) resolve under the node namespace. `absolute=True`
-    is for explorer_node: its tf2_ros::TransformListener creates an internal node in the ROOT
+    is for nodes whose tf2_ros::TransformListener creates an internal node in the ROOT
     namespace that only sees global remaps, so a relative target would resolve to /tf.
     """
     if not namespace:
@@ -84,11 +84,8 @@ def rewrite_yaml(yaml_path, namespace):
 def substitute_namespace_markers(source_file, namespace):
     """ReplaceString substitution that turns '/<robot_namespace>' into '/<ns>' ('' if no namespace).
 
-    Same pattern as RViz in master_explore. Used for nav2_params.yaml, whose costmap topics must be
-    absolute (nested costmap nodes). It ALWAYS returns a ReplaceString (also with namespace '', so the
-    marker becomes '' and '/<robot_namespace>/scan' -> '/scan', never '//scan'). Chain it BEFORE
-    rewrite_yaml: ReplaceString.perform() writes a temporary file and returns its path, and
-    RewrittenYaml(source_file=<substitution>) performs its source_file substitution, so it reads that file.
+    Used for the RViz config ('/<robot_namespace>/scan' -> '/r2/scan'). It ALWAYS returns a ReplaceString
+    (also with namespace '', so the marker becomes '' and '/<robot_namespace>/scan' -> '/scan', never '//scan').
     """
     from nav2_common.launch import ReplaceString
 

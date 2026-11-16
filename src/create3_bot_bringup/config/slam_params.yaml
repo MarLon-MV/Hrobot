@@ -1,7 +1,7 @@
 # slam_toolbox online_async (mapping) for Create 3 + LDROBOT LD19.
 # Node name is `slam_toolbox` (launched as async_slam_toolbox_node, name='slam_toolbox').
 #
-# map_file_name / map_start_at_dock are intentionally NOT set here: master_explore.launch.py adds
+# map_file_name / map_start_at_dock are intentionally NOT set here: slam.launch.py adds
 #   map_file_name: <maps_dir>/<map>   (base path WITHOUT extension; loads <map>.posegraph + .data)
 #   map_start_at_dock: true
 # only when launched with map:=<name>, to extend an existing map. Without map:= a new map is started.
