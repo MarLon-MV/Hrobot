@@ -166,14 +166,16 @@ else
 fi
 
 log "Instalando dependencias con rosdep"
-rosdep install --from-paths src --ignore-src -y --rosdistro "${ROS_DISTRO_NAME}"
+# create3_bot_simulation (Gazebo) es solo para el PC de desarrollo: no se instala ni compila en la Pi.
+rosdep install --from-paths src --ignore-src -y --rosdistro "${ROS_DISTRO_NAME}" \
+  --skip-keys "ros_gz_sim ros_gz_bridge"
 
 if [ "${SKIP_BUILD}" -eq 0 ]; then
   log "Compilando con colcon (workers: ${JOBS})"
-  build_args=(--symlink-install --parallel-workers "${JOBS}")
+  build_args=(--symlink-install --parallel-workers "${JOBS}" --packages-skip create3_bot_simulation)
   if [ "${USE_EXISTING_DRIVER}" -eq 1 ]; then
     # Evita recompilar/sobrescribir el driver del otro workspace si también hay copia en src/.
-    [ -d "${LD_DIR}" ] && build_args+=(--packages-skip ldlidar_stl_ros2)
+    [ -d "${LD_DIR}" ] && build_args+=(ldlidar_stl_ros2)
   else
     # El driver no incluye <pthread.h> y falla con el GCC de Ubuntu 24.04 (pthread_mutex_* sin declarar).
     build_args+=(--cmake-args "-DCMAKE_CXX_FLAGS=-include pthread.h")
@@ -191,9 +193,9 @@ Siguientes pasos:
   echo \$ROS_DOMAIN_ID \$RMW_IMPLEMENTATION   # ${ROS_DOMAIN_ID-?} ${RMW_IMPLEMENTATION-?}; deben coincidir con el Create 3
   scripts/set_robot.sh r2       # opcional: fija el namespace del robot (por defecto r2; no cambia el del Create 3)
   scripts/set_robot.sh --check  # comprueba que existen /<namespace>/odom y /<namespace>/cmd_vel
-  ros2 launch create3_bot_bringup master_explore.launch.py lidar_port:=/dev/ldlidar
-  # otro robot sin tocar el entorno: ... master_explore.launch.py robot_namespace:=r3
+  ros2 launch create3_bot_bringup mapping.launch.py lidar_port:=/dev/ldlidar
+  # otro robot sin tocar el entorno: ... mapping.launch.py robot_namespace:=r3
 Namespace en esta terminal: ${CREATE3_ROBOT_NAMESPACE-r2} (variable CREATE3_ROBOT_NAMESPACE o 'r2'). Todo el stack cuelga de él: /r2/scan, /r2/map,
-/r2/explore_map, /r2/save_exploration_map... El namespace del Create 3 se cambia en su interfaz web.
+.../r2/cmd_vel... El namespace del Create 3 se cambia en su interfaz web.
 Comprueba que ves los topics del Create 3 (ros2 topic list) y el QoS de /r2/scan (ros2 topic info /r2/scan -v).
 EOF

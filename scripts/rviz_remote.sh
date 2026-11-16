@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Abre RViz2 en OTRO equipo (p. ej. un portátil Ubuntu con ROS 2 Jazzy) conectado a la misma red que el
-# robot, con la configuración de exploración y el namespace del robot ya aplicados.
+# robot, con la configuración de mapeo y el namespace del robot ya aplicados.
 #
 # Uso:  scripts/rviz_remote.sh [-n|--namespace NOMBRE] [--dry-run] [-h]
 #   -n NOMBRE   namespace del robot (por defecto: $CREATE3_ROBOT_NAMESPACE o "r2"; "" = sin namespace)
@@ -14,7 +14,7 @@ set -euo pipefail
 
 ROS_DISTRO_NAME="${ROS_DISTRO_NAME:-jazzy}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-RVIZ_SRC="${REPO_ROOT}/src/create3_bot_description/rviz/exploration.rviz"
+RVIZ_SRC="${REPO_ROOT}/src/create3_bot_description/rviz/mapping.rviz"
 NS="${CREATE3_ROBOT_NAMESPACE-r2}"
 DRY_RUN=0
 
@@ -34,10 +34,10 @@ done
 [[ "${NS}" =~ ^([a-z][a-z0-9_]{0,31})?$ ]] || die "Namespace inválido: '${NS}' (esperado ^[a-z][a-z0-9_]{0,31}$ o vacío)"
 [ -f "${RVIZ_SRC}" ] || die "No se encuentra ${RVIZ_SRC} (¿ejecutas el script desde un clon completo del repo?)"
 
-# '/<robot_namespace>' -> '/<ns>' (o '' sin namespace), igual que hace master_explore.launch.py.
+# '/<robot_namespace>' -> '/<ns>' (o '' sin namespace), igual que hace slam.launch.py.
 if [ -n "${NS}" ]; then PREFIX="/${NS}"; else PREFIX=""; fi
 
-TMP_CONFIG="$(mktemp "${TMPDIR:-/tmp}/exploration_rviz.XXXXXX")"
+TMP_CONFIG="$(mktemp "${TMPDIR:-/tmp}/mapping_rviz.XXXXXX")"
 trap 'rm -f "${TMP_CONFIG}"' EXIT
 sed "s#/<robot_namespace>#${PREFIX}#g" "${RVIZ_SRC}" > "${TMP_CONFIG}"
 if grep -q '<robot_namespace>' "${TMP_CONFIG}"; then die "Quedan marcadores <robot_namespace> sin sustituir"; fi

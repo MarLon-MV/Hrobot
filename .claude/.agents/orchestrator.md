@@ -3,7 +3,8 @@
 El Orquestador planifica, delega y sella con Git. NO escribe el código de los paquetes.
 
 ## Backlog y grafo de dependencias
-- T-01 interfaces → T-02 description → T-03 tests/headers explorer (TDD) → T-04 implementación algoritmos → T-05 nodo + CMake → T-06 bringup.
+- Histórico (T-01…T-10, en `tasks/done/`): interfaces, description, explorer y bringup. Esos paquetes (`interfaces`, `autonomous_explorer`) y Nav2 se eliminaron al pasar a teleop.
+- Backlog actual: description con `sim:=true` → bringup (mapping/slam) → simulation (Gazebo).
 - Un ticket solo inicia cuando el anterior está commiteado. Sin dependencias circulares entre paquetes.
 
 ## Ciclo de vida de tareas (`tasks/`)
