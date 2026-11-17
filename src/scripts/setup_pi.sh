@@ -11,7 +11,7 @@
 #      (otro workspace ya compilado y cargado), lo reutiliza; si no, lo clona en src/ldlidar_stl_ros2.
 #   3. Permisos del puerto serie: grupo dialout + regla udev con symlink /dev/ldlidar.
 #   4. Red ROS 2: fija ROS_DOMAIN_ID y RMW_IMPLEMENTATION (deben coincidir con los del Create 3),
-#      los guarda en ~/.config/create3_bot/ros_net.env y los carga desde ~/.bashrc (bloque marcado, una vez).
+#      los guarda en ~/.config/hrobot/ros_net.env y los carga desde ~/.bashrc (bloque marcado, una vez).
 #   5. Instala dependencias con rosdep y compila con colcon.
 #
 # Uso:  scripts/setup_pi.sh [--skip-udev] [--skip-build] [--force-driver] [--skip-net]
@@ -39,11 +39,11 @@ UDEV_RULE="/etc/udev/rules.d/99-ldlidar.rules"
 # CP2102 (USB-serie habitual del LD19). Verifícalo con `lsusb` y ajusta si tu adaptador es otro.
 UDEV_CONTENT='SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", SYMLINK+="ldlidar", GROUP="dialout", MODE="0660"'
 
-NET_DIR="${HOME}/.config/create3_bot"
+NET_DIR="${HOME}/.config/hrobot"
 NET_FILE="${NET_DIR}/ros_net.env"
 BASHRC="${HOME}/.bashrc"
-NET_BEGIN="# >>> create3_bot ros_net >>>"
-NET_END="# <<< create3_bot ros_net <<<"
+NET_BEGIN="# >>> hrobot ros_net >>>"
+NET_END="# <<< hrobot ros_net <<<"
 DOMAIN_ID="${ROS_DOMAIN_ID:-0}"
 RMW_NAME="${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}"
 
@@ -162,13 +162,13 @@ else
 fi
 
 log "Instalando dependencias con rosdep"
-# create3_bot_simulation (Gazebo) es solo para el PC de desarrollo: no se instala ni compila en la Pi.
+# hrobot_simulation (Gazebo) es solo para el PC de desarrollo: no se instala ni compila en la Pi.
 rosdep install --from-paths src --ignore-src -y --rosdistro "${ROS_DISTRO_NAME}" \
   --skip-keys "ros_gz_sim ros_gz_bridge"
 
 if [ "${SKIP_BUILD}" -eq 0 ]; then
   log "Compilando con colcon (workers: ${JOBS})"
-  build_args=(--symlink-install --parallel-workers "${JOBS}" --packages-skip create3_bot_simulation)
+  build_args=(--symlink-install --parallel-workers "${JOBS}" --packages-skip hrobot_simulation)
   if [ "${USE_EXISTING_DRIVER}" -eq 1 ]; then
     # Evita recompilar/sobrescribir el driver del otro workspace si también hay copia en src/.
     [ -d "${LD_DIR}" ] && build_args+=(ldlidar_stl_ros2)
@@ -188,7 +188,7 @@ Siguientes pasos:
   ls -l /dev/ldlidar            # o /dev/ttyUSB0 si no usas la regla udev
   echo \$ROS_DOMAIN_ID \$RMW_IMPLEMENTATION   # ${ROS_DOMAIN_ID-?} ${RMW_IMPLEMENTATION-?}; deben coincidir con el Create 3
   ros2 topic list | grep -E '/r2/(odom|cmd_vel)'   # comprueba los topics del Create 3
-  ros2 launch create3_bot_bringup mapping.launch.py lidar_port:=/dev/ldlidar
+  ros2 launch hrobot_bringup mapping.launch.py lidar_port:=/dev/ldlidar
   # otro robot sin tocar el entorno: ... mapping.launch.py robot_namespace:=r3
 Namespace en esta terminal: ${CREATE3_ROBOT_NAMESPACE-r2} (variable CREATE3_ROBOT_NAMESPACE o 'r2'). Todo el stack cuelga de él: /r2/scan, /r2/map,
 .../r2/cmd_vel... El namespace del Create 3 se cambia en su interfaz web.

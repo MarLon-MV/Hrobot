@@ -12,12 +12,12 @@ el robot real se simula en **Gazebo Harmonic**.
 
 | Paquete | Tipo | Contenido |
 |---|---|---|
-| [`create3_bot_description`](create3_bot_description) | ament_cmake | URDF/xacro (`base_link` → `laser_frame`; con `sim:=true` añade ruedas y plugins de Gazebo) y config de RViz. |
-| [`create3_bot_bringup`](create3_bot_bringup) | ament_cmake | Solo `config/` y `launch/` para el robot real: `mapping`, `hardware_base`, `slam`. |
-| [`create3_bot_simulation`](create3_bot_simulation) | ament_cmake | Gazebo: mundo, puente `ros_gz_bridge` y `sim.launch.py`. Solo para el PC de desarrollo. |
+| [`hrobot_description`](hrobot_description) | ament_cmake | URDF/xacro (`base_link` → `laser_frame`; con `sim:=true` añade ruedas y plugins de Gazebo) y config de RViz. |
+| [`hrobot_bringup`](hrobot_bringup) | ament_cmake | Solo `config/` y `launch/` para el robot real: `mapping`, `hardware_base`, `slam`. |
+| [`hrobot_simulation`](hrobot_simulation) | ament_cmake | Gazebo: mundo, puente `ros_gz_bridge` y `sim.launch.py`. Solo para el PC de desarrollo. |
 
 ```text
-create3_bot_description ◄── create3_bot_bringup ◄── create3_bot_simulation
+hrobot_description ◄── hrobot_bringup ◄── hrobot_simulation
         ▲                                                    │
         └────────────────────────────────────────────────────┘
 ```
@@ -39,23 +39,23 @@ quién publica `scan`, `odom` y TF.
 ```bash
 # PC de desarrollo (simulación): ROS 2 Jazzy + Gazebo Harmonic + ros_gz
 sudo apt install ros-jazzy-ros-gz ros-jazzy-slam-toolbox ros-jazzy-teleop-twist-keyboard ros-jazzy-nav2-common ros-jazzy-navigation2 ros-jazzy-xacro
-colcon build --symlink-install --packages-select create3_bot_description create3_bot_bringup create3_bot_simulation
+colcon build --symlink-install --packages-select hrobot_description hrobot_bringup hrobot_simulation
 source install/setup.bash
-ros2 launch create3_bot_simulation sim.launch.py                 # terminal 1
+ros2 launch hrobot_simulation sim.launch.py                 # terminal 1
 ros2 run teleop_twist_keyboard teleop_twist_keyboard             # terminal 2 (mueve el robot)
 
 # Navegación autónoma (AMCL + Nav2) sobre un mapa guardado (maps/mapa1.yaml; ver bringup para guardarlo)
-ros2 launch create3_bot_simulation sim.launch.py nav:=true map_yaml:=$PWD/maps/mapa1.yaml
+ros2 launch hrobot_simulation sim.launch.py nav:=true map_yaml:=$PWD/maps/mapa1.yaml
 # En RViz: "2D Goal Pose" para mandar el robot a un punto (AMCL ya arranca en la pose de spawn)
 
 # Robot real (Raspberry Pi), ver src/scripts/setup_pi.sh
-ros2 launch create3_bot_bringup mapping.launch.py lidar_port:=/dev/ldlidar
+ros2 launch hrobot_bringup mapping.launch.py lidar_port:=/dev/ldlidar
 ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r cmd_vel:=/r2/cmd_vel
-ros2 launch create3_bot_bringup navigation.launch.py map_yaml:=$PWD/maps/mapa1.yaml lidar_port:=/dev/ldlidar   # navegar (2D Pose Estimate en RViz)
+ros2 launch hrobot_bringup navigation.launch.py map_yaml:=$PWD/maps/mapa1.yaml lidar_port:=/dev/ldlidar   # navegar (2D Pose Estimate en RViz)
 ```
 
-Más detalle en los README de [bringup](create3_bot_bringup/README.md) y
-[simulation](create3_bot_simulation/README.md). Guardado de mapas: ver bringup.
+Más detalle en los README de [bringup](hrobot_bringup/README.md) y
+[simulation](hrobot_simulation/README.md). Guardado de mapas: ver bringup.
 
 ## Namespace del robot (`robot_namespace`)
 

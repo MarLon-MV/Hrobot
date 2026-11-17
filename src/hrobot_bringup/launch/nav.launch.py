@@ -23,7 +23,7 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
-from create3_namespace import (  # noqa: E402
+from hrobot_namespace import (  # noqa: E402
     namespaced,
     resolve_namespace,
     rewrite_yaml,
@@ -107,7 +107,7 @@ def _setup(context, *args, **kwargs):
     if _truthy(context, "odom_relay"):
         actions.append(
             Node(
-                package="create3_bot_bringup",
+                package="hrobot_bringup",
                 executable="odom_relay.py",
                 name="odom_relay",
                 output="screen",
@@ -115,7 +115,7 @@ def _setup(context, *args, **kwargs):
             )
         )
 
-    description_share = get_package_share_directory("create3_bot_description")
+    description_share = get_package_share_directory("hrobot_description")
     rviz_config = substitute_namespace_markers(
         os.path.join(description_share, "rviz", "navigation.rviz"), namespace
     )
@@ -136,7 +136,7 @@ def _setup(context, *args, **kwargs):
 
 def generate_launch_description():
     default_params = os.path.join(
-        get_package_share_directory("create3_bot_bringup"), "config", "nav2_params.yaml"
+        get_package_share_directory("hrobot_bringup"), "config", "nav2_params.yaml"
     )
     return LaunchDescription(
         [

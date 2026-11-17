@@ -7,7 +7,7 @@ the Create 3 web UI > Application > ROS 2). The Create 3 lives in a namespace (d
 publishes /r2/odom, /r2/tf, /r2/tf_static and listens on /r2/cmd_vel); this launch puts the
 nodes it creates under the same `robot_namespace` and remaps TF to <ns>/tf and <ns>/tf_static
 (empty robot_namespace = no namespace). The namespace is applied here once (see
-create3_namespace.py); callers must not wrap this launch in another namespace. Pending hardware
+hrobot_namespace.py); callers must not wrap this launch in another namespace. Pending hardware
 check.
 
 LD19 driver ASSUMPTION: LDRobot's official `ldlidar_stl_ros2` package (node executable
@@ -27,7 +27,7 @@ from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
-from create3_namespace import (  # noqa: E402
+from hrobot_namespace import (  # noqa: E402
     namespaced,
     resolve_namespace,
     robot_namespace_argument,
@@ -42,7 +42,7 @@ def _setup(context, *args, **kwargs):
     lidar_baudrate = LaunchConfiguration("lidar_baudrate")
 
     xacro_file = os.path.join(
-        get_package_share_directory("create3_bot_description"), "urdf", "create3_ld19.urdf.xacro"
+        get_package_share_directory("hrobot_description"), "urdf", "hrobot_ld19.urdf.xacro"
     )
     robot_description = ParameterValue(
         Command([FindExecutable(name="xacro"), " ", xacro_file]), value_type=str

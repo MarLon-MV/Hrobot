@@ -1,10 +1,10 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>create3_bot_description</name>
+  <name>hrobot_description</name>
   <version>0.1.0</version>
   <description>URDF/xacro model (Create 3 base + LD19 LiDAR) and RViz configuration for the Create 3 teleoperated mapping robot.</description>
-  <maintainer email="dev@example.com">create3_bot</maintainer>
+  <maintainer email="dev@example.com">hrobot</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>

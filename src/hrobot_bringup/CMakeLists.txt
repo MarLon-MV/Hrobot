@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(create3_bot_bringup)
+project(hrobot_bringup)
 
 find_package(ament_cmake REQUIRED)
 

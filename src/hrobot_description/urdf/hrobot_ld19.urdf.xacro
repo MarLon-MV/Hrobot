@@ -1,5 +1,5 @@
 <?xml version="1.0"?>
-<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="create3_ld19">
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="hrobot_ld19">
 
   <!-- sim:=true adds wheels, casters and the Gazebo (gz-sim, Harmonic) plugins: diff drive,
        joint states and the LD19 as a gpu_lidar. With sim:=false (real robot) the model is just
@@ -41,13 +41,13 @@
     <visual>
       <origin xyz="0 0 ${mesh_z}" rpy="0 0 ${pi / 2}"/>
       <geometry>
-        <mesh filename="package://create3_bot_description/meshes/body_visual.dae"/>
+        <mesh filename="package://hrobot_description/meshes/body_visual.dae"/>
       </geometry>
     </visual>
     <visual>
       <origin xyz="0 0 ${mesh_z}" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="package://create3_bot_description/meshes/bumper_visual.dae"/>
+        <mesh filename="package://hrobot_description/meshes/bumper_visual.dae"/>
       </geometry>
     </visual>
     <!-- Bottom lifted to 0.025 m so the body never drags on the floor in simulation. -->

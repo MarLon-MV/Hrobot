@@ -1,4 +1,4 @@
-"""Shared helpers for the create3_bot_bringup launch files (robot namespace handling).
+"""Shared helpers for the hrobot_bringup launch files (robot namespace handling).
 
 This is a plain Python module (not a launch file): the launch files add their own directory to
 sys.path and import it.

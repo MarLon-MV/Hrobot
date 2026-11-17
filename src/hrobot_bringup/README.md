@@ -1,4 +1,4 @@
-# create3_bot_bringup
+# hrobot_bringup
 
 Solo `config/` y `launch/` (sin nodos propios) para el robot **real**: Create 3 + RPi5 + LiDAR LD19, mapeo
 con slam_toolbox y movimiento por teleop.
@@ -6,11 +6,11 @@ con slam_toolbox y movimiento por teleop.
 ## Lanzar
 
 ```bash
-ros2 launch create3_bot_bringup mapping.launch.py lidar_port:=/dev/ldlidar
+ros2 launch hrobot_bringup mapping.launch.py lidar_port:=/dev/ldlidar
 # Argumentos: robot_namespace:=r2  use_sim_time:=false  rviz:=true|false  maps_dir:=~/.create3_maps
 #             map:=<nombre>  slam_lifecycle:=true|false  lidar_port:=/dev/ttyUSB0  lidar_baudrate:=230400
-ros2 launch create3_bot_bringup mapping.launch.py robot_namespace:=r3   # otro robot
-ros2 launch create3_bot_bringup mapping.launch.py robot_namespace:=''   # sin namespace
+ros2 launch hrobot_bringup mapping.launch.py robot_namespace:=r3   # otro robot
+ros2 launch hrobot_bringup mapping.launch.py robot_namespace:=''   # sin namespace
 
 # Mover el robot (otra terminal)
 ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r cmd_vel:=/r2/cmd_vel
@@ -20,8 +20,8 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r cmd_vel:=/r2/
 |---|---|
 | `mapping.launch.py` | Robot real: `hardware_base` + `slam`. |
 | `hardware_base.launch.py` | `robot_state_publisher` (xacro, `sim:=false`) + driver LD19. El Create 3 no se lanza aquí. |
-| `slam.launch.py` | `slam_toolbox` + RViz (`mapping.rviz`). Lo reutiliza `create3_bot_simulation`. |
-| `create3_namespace.py` | Módulo auxiliar de namespace (no es un launch). |
+| `slam.launch.py` | `slam_toolbox` + RViz (`mapping.rviz`). Lo reutiliza `hrobot_simulation`. |
+| `hrobot_namespace.py` | Módulo auxiliar de namespace (no es un launch). |
 
 ## Namespace del robot
 
@@ -53,7 +53,7 @@ ros2 service call /r2/slam_toolbox/serialize_map slam_toolbox/srv/SerializePoseG
 ros2 service call /r2/slam_toolbox/save_map slam_toolbox/srv/SaveMap "{name: {data: '$WS/maps/sala1'}}"
 
 # Ampliar un mapa guardado (el robot debe arrancar en el dock/origen del mapa)
-ros2 launch create3_bot_bringup mapping.launch.py map:=sala1 maps_dir:=$WS/maps
+ros2 launch hrobot_bringup mapping.launch.py map:=sala1 maps_dir:=$WS/maps
 ```
 
 Con `map:=<nombre>` slam_toolbox carga `<maps_dir>/<nombre>.posegraph` (`map_start_at_dock: true`, modo mapping). Si el
@@ -81,7 +81,7 @@ absolutas (sin `~`).
 Sobre un mapa ya guardado (imagen `.yaml`/`.pgm` de `save_map`, ver arriba). No corre slam_toolbox a la vez.
 
 ```bash
-ros2 launch create3_bot_bringup navigation.launch.py map_yaml:=$WS/maps/sala1.yaml lidar_port:=/dev/ldlidar
+ros2 launch hrobot_bringup navigation.launch.py map_yaml:=$WS/maps/sala1.yaml lidar_port:=/dev/ldlidar
 ```
 
 - `nav.launch.py` (sin hardware, lo comparte la simulación): `map_server` + `amcl` (publica `map -> odom`) + Nav2

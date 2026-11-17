@@ -32,7 +32,7 @@ from launch_ros.events.lifecycle import ChangeState
 from lifecycle_msgs.msg import Transition
 
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
-from create3_namespace import (  # noqa: E402
+from hrobot_namespace import (  # noqa: E402
     namespaced,
     resolve_namespace,
     rewrite_yaml,
@@ -57,8 +57,8 @@ def _setup(context, *args, **kwargs):
         "yes",
     )
 
-    bringup_share = get_package_share_directory("create3_bot_bringup")
-    description_share = get_package_share_directory("create3_bot_description")
+    bringup_share = get_package_share_directory("hrobot_bringup")
+    description_share = get_package_share_directory("hrobot_description")
     slam_yaml = rewrite_yaml(os.path.join(bringup_share, "config", "slam_params.yaml"), namespace)
     tf_remaps = tf_remappings(namespace)
     # slam_toolbox publishes the absolute topics /map and /map_metadata, so PushRosNamespace does

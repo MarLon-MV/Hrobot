@@ -32,15 +32,15 @@ from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
-    sim_share = get_package_share_directory("create3_bot_simulation")
-    bringup_share = get_package_share_directory("create3_bot_bringup")
-    description_share = get_package_share_directory("create3_bot_description")
+    sim_share = get_package_share_directory("hrobot_simulation")
+    bringup_share = get_package_share_directory("hrobot_bringup")
+    description_share = get_package_share_directory("hrobot_description")
     ros_gz_sim_share = get_package_share_directory("ros_gz_sim")
 
     world = LaunchConfiguration("world")
     headless = LaunchConfiguration("headless")
 
-    xacro_file = os.path.join(description_share, "urdf", "create3_ld19.urdf.xacro")
+    xacro_file = os.path.join(description_share, "urdf", "hrobot_ld19.urdf.xacro")
     robot_description = ParameterValue(
         Command([FindExecutable(name="xacro"), " ", xacro_file, " sim:=true"]), value_type=str
     )
@@ -143,7 +143,7 @@ def generate_launch_description():
             DeclareLaunchArgument("x", default_value="0.0"),
             DeclareLaunchArgument("y", default_value="0.0"),
             DeclareLaunchArgument("yaw", default_value="0.0"),
-            # Gazebo resolves package://create3_bot_description/meshes/... through this path.
+            # Gazebo resolves package://hrobot_description/meshes/... through this path.
             SetEnvironmentVariable(
                 "GZ_SIM_RESOURCE_PATH",
                 [os.path.dirname(description_share), ":", os.environ.get("GZ_SIM_RESOURCE_PATH", "")],

@@ -1,4 +1,4 @@
-# create3_bot_simulation
+# hrobot_simulation
 
 Simulación en **Gazebo Harmonic** (gz-sim 8, `ros_gz`, ROS 2 Jazzy) del Create 3 + LD19 para probar el mapeo con
 teleop antes de usar el robot real. Solo `launch/`, `config/` y `worlds/`.
@@ -12,10 +12,10 @@ sudo apt install ros-jazzy-ros-gz ros-jazzy-slam-toolbox ros-jazzy-teleop-twist-
 ## Uso
 
 ```bash
-colcon build --symlink-install --packages-select create3_bot_description create3_bot_bringup create3_bot_simulation
+colcon build --symlink-install --packages-select hrobot_description hrobot_bringup hrobot_simulation
 source install/setup.bash
 
-ros2 launch create3_bot_simulation sim.launch.py                       # Gazebo + robot + slam + RViz
+ros2 launch hrobot_simulation sim.launch.py                       # Gazebo + robot + slam + RViz
 ros2 run teleop_twist_keyboard teleop_twist_keyboard                   # otra terminal: i/j/l/,/k
 ```
 
@@ -31,7 +31,7 @@ Guardar/ampliar mapas: igual que en el robot real (ver bringup), sin namespace
 
 | Elemento | Cómo |
 |---|---|
-| Base | URDF `create3_ld19.urdf.xacro` con `sim:=true`: base, 2 ruedas (separación 0.233 m, radio 0.03575 m) y 1 caster delantero sin fricción. Visual con los meshes oficiales de iRobot (`create3_bot_description/meshes`). |
+| Base | URDF `hrobot_ld19.urdf.xacro` con `sim:=true`: base, 2 ruedas (separación 0.233 m, radio 0.03575 m) y 1 caster delantero sin fricción. Visual con los meshes oficiales de iRobot (`hrobot_description/meshes`). |
 | Movimiento | plugin `gz-sim-diff-drive-system`: `cmd_vel` → `odom` + TF `odom → base_link` (frames `odom`/`base_link`). |
 | LiDAR | `gpu_lidar` en `laser_frame`: 360°, 450 muestras, 10 Hz, 0.02–12 m, ruido gaussiano 1 cm. Publica `/scan`. |
 | Puente | `config/gz_bridge.yaml`: `/clock`, `/cmd_vel`, `/odom`, `/tf`, `/joint_states`, `/scan`. |
