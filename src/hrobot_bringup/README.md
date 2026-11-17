@@ -40,6 +40,29 @@ envuelve los `include` (nunca `/r2/r2/...`).
 | Create 3 | `/r2/odom`, `/r2/cmd_vel`, `/r2/tf`, `/r2/tf_static` | `/odom`, `/cmd_vel`, `/tf`, `/tf_static` |
 | slam_toolbox | `/r2/slam_toolbox/serialize_map`, `/r2/slam_toolbox/save_map` | sin prefijo |
 
+## Red ROS 2 y scripts auxiliares
+
+Pi, laptop y Create 3 deben compartir `ROS_DOMAIN_ID` y RMW (`rmw_fastrtps_cpp` o `rmw_cyclonedds_cpp`). El Create 3 los
+fija en su interfaz web (Application > ROS 2); reinicia su aplicación tras cambiarlos. Scripts en `src/scripts/`:
+
+| Script | Dónde | Para qué |
+|---|---|---|
+| `setup_pi.sh [--domain-id N] [--rmw NAME] [--skip-net]` | Pi (una vez) | Instala dependencias y driver LD19, regla udev `/dev/ldlidar`, **fija `ROS_DOMAIN_ID` y `RMW_IMPLEMENTATION`** (`~/.config/hrobot/ros_net.env`, cargado desde `~/.bashrc`) y compila. |
+| `rviz_remote.sh [mapping\|navigation] [--namespace NS] [--domain ID] [--rmw NAME]` | Laptop | Abre RViz contra el robot real: sustituye `/<robot_namespace>` en el `.rviz` y remapea `/tf` y `/tf_static`. No fija nada de forma permanente. |
+| `save_map.sh <nombre>` | Donde corre slam_toolbox (Pi) | Guarda el mapa (ver más abajo). |
+
+Con la Pi ya configurada, en la laptop exporta los mismos valores (`export ROS_DOMAIN_ID=.. RMW_IMPLEMENTATION=..`) o
+pásalos con `--domain`/`--rmw`. Comprueba con `ros2 topic list` que ves `/r2/scan`.
+
+### Ver el mapeo desde la laptop
+
+```bash
+# Pi: mapear sin RViz local
+ros2 launch hrobot_bringup mapping.launch.py lidar_port:=/dev/ldlidar rviz:=false
+# Laptop (necesita este repo y ros-jazzy-rviz2; no hace falta compilar)
+src/scripts/rviz_remote.sh                 # o: rviz_remote.sh navigation
+```
+
 ## Flujo completo en el robot real: mapear -> guardar -> navegar
 
 Desde la raíz del workspace (`source install/setup.bash`):
@@ -90,7 +113,7 @@ absolutas (sin `~`).
 - **Driver LD19**: `ldlidar_stl_ros2` (ejecutable `ldlidar_stl_ros2_node`, `product_name: LDLiDAR_LD19`). Si usas otro,
   edita `hardware_base.launch.py` y `package.xml`. Puerto por defecto `/dev/ttyUSB0`, 230400 baudios; `laser_scan_dir`
   puede requerir invertirse.
-- **Create 3**: se conecta por red (mismo `ROS_DOMAIN_ID` y RMW que la RPi5) y publica `odom -> base_link` en `/r2/tf`.
+- **Create 3**: se conecta por red (ver «Red ROS 2 y scripts auxiliares») y publica `odom -> base_link` en `/r2/tf`.
 - **TF**: `laser_frame` cuelga de `base_link` con `laser_z: 0.12` m (medir el real). `map -> odom` lo da slam_toolbox.
 - **slam_toolbox lifecycle**: en Jazzy `async_slam_toolbox_node` es lifecycle; si no lo es, `slam_lifecycle:=false`.
 - Los nombres de los campos de `SerializePoseGraph`/`SaveMap` de arriba están escritos de memoria: verifícalos con

@@ -3,10 +3,11 @@
 #
 # En la Pi lanza antes:  ros2 launch hrobot_bringup mapping.launch.py lidar_port:=/dev/ldlidar rviz:=false
 #
-# Uso:  src/scripts/rviz_remote.sh [mapping|navigation] [--namespace NS] [--domain ID]
+# Uso:  src/scripts/rviz_remote.sh [mapping|navigation] [--namespace NS] [--domain ID] [--rmw NAME]
 #   mapping|navigation  config de RViz a usar (def: mapping)
 #   --namespace         namespace del robot (def: $CREATE3_ROBOT_NAMESPACE si existe, si no r2; vacío = ninguno)
 #   --domain            ROS_DOMAIN_ID (def: el que ya tengas exportado; debe coincidir con el de la Pi)
+#   --rmw               RMW_IMPLEMENTATION (def: el que ya tengas exportado; debe coincidir con el de la Pi)
 
 set -euo pipefail
 
@@ -23,7 +24,8 @@ while [ $# -gt 0 ]; do
     mapping|navigation) CONFIG="${arg}" ;;
     --namespace) [ $# -gt 0 ] || die "--namespace necesita un valor (usa '' para ninguno)"; NAMESPACE="$1"; shift ;;
     --domain) [ $# -gt 0 ] || die "--domain necesita un valor"; export ROS_DOMAIN_ID="$1"; shift ;;
-    -h|--help) sed -n '2,9p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    --rmw) [ $# -gt 0 ] || die "--rmw necesita un valor"; export RMW_IMPLEMENTATION="$1"; shift ;;
+    -h|--help) sed -n '2,10p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) die "argumento desconocido: ${arg}" ;;
   esac
 done
@@ -51,5 +53,5 @@ else
   REMAPS=()
 fi
 
-echo "RViz: config=${CONFIG} namespace='${NAMESPACE}' ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}"
+echo "RViz: config=${CONFIG} namespace='${NAMESPACE}' ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0} RMW=${RMW_IMPLEMENTATION:-default}"
 rviz2 -d "${TMP_RVIZ}" --ros-args "${REMAPS[@]}"
