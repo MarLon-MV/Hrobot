@@ -40,7 +40,28 @@ envuelve los `include` (nunca `/r2/r2/...`).
 | Create 3 | `/r2/odom`, `/r2/cmd_vel`, `/r2/tf`, `/r2/tf_static` | `/odom`, `/cmd_vel`, `/tf`, `/tf_static` |
 | slam_toolbox | `/r2/slam_toolbox/serialize_map`, `/r2/slam_toolbox/save_map` | sin prefijo |
 
-## Guardar y ampliar un mapa
+## Flujo completo en el robot real: mapear -> guardar -> navegar
+
+Desde la raíz del workspace (`source install/setup.bash`):
+
+```bash
+# 1. Mapear (terminal 1) y mover el robot con teleop (terminal 2)
+ros2 launch hrobot_bringup mapping.launch.py lidar_port:=/dev/ldlidar
+ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r cmd_vel:=/r2/cmd_vel
+
+# 2. Guardar (terminal 3, con el mapeo aún corriendo). Genera maps/sala1.{posegraph,data,yaml,pgm}
+src/scripts/save_map.sh sala1
+
+# 3. Parar el mapeo (Ctrl+C) y navegar sobre el mapa guardado
+ros2 launch hrobot_bringup navigation.launch.py map_yaml:=$PWD/maps/sala1.yaml lidar_port:=/dev/ldlidar
+#    En RViz: "2D Pose Estimate" (pose inicial) y luego "2D Goal Pose".
+```
+
+`save_map.sh <nombre> [--maps-dir DIR] [--namespace NS] [--force]` llama a los servicios `serialize_map` y `save_map`
+de slam_toolbox, no sobrescribe sin `--force` y comprueba que los cuatro archivos existan. No corras mapping y
+navigation a la vez: ambos publican `map -> odom`.
+
+## Guardar y ampliar un mapa (manual)
 
 Con slam_toolbox corriendo (ajusta el namespace; los nombres son rutas en la máquina donde corre slam_toolbox):
 
