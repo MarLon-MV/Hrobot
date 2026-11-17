@@ -29,6 +29,7 @@ def generate_launch_description():
             "use_sim_time": use_sim_time,
             "lidar_port": LaunchConfiguration("lidar_port"),
             "lidar_baudrate": LaunchConfiguration("lidar_baudrate"),
+            "laser_scan_dir": LaunchConfiguration("laser_scan_dir"),
         }.items(),
     )
     slam = IncludeLaunchDescription(
@@ -54,6 +55,7 @@ def generate_launch_description():
                 description="Serial port of the LD19; e.g. /dev/ldlidar.",
             ),
             DeclareLaunchArgument("lidar_baudrate", default_value="230400"),
+            DeclareLaunchArgument("laser_scan_dir", default_value="true", description="true|false"),
             DeclareLaunchArgument("maps_dir", default_value="~/.create3_maps"),
             DeclareLaunchArgument("map", default_value="", description="Map to extend; empty = new."),
             DeclareLaunchArgument("slam_lifecycle", default_value="true"),

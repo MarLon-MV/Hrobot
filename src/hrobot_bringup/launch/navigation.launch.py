@@ -30,6 +30,7 @@ def generate_launch_description():
             "use_sim_time": use_sim_time,
             "lidar_port": LaunchConfiguration("lidar_port"),
             "lidar_baudrate": LaunchConfiguration("lidar_baudrate"),
+            "laser_scan_dir": LaunchConfiguration("laser_scan_dir"),
         }.items(),
     )
     nav = IncludeLaunchDescription(
@@ -55,6 +56,7 @@ def generate_launch_description():
             DeclareLaunchArgument("rviz", default_value="true", description="true|false"),
             DeclareLaunchArgument("lidar_port", default_value="/dev/ttyUSB0"),
             DeclareLaunchArgument("lidar_baudrate", default_value="230400"),
+            DeclareLaunchArgument("laser_scan_dir", default_value="true", description="true|false"),
             DeclareLaunchArgument("set_initial_pose", default_value="false"),
             DeclareLaunchArgument("initial_x", default_value="0.0"),
             DeclareLaunchArgument("initial_y", default_value="0.0"),

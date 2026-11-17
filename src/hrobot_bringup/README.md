@@ -52,7 +52,8 @@ RViz no coincide con el real. Para tener una referencia repetible (y la que exig
    ```bash
    ros2 service call /r2/reset_pose irobot_create_msgs/srv/ResetPose "{pose: {position: {x: 0.0, y: 0.0, z: 0.0}, orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}}"
    ```
-   (Verifica los campos con `ros2 interface show irobot_create_msgs/srv/ResetPose`.)
+   Necesita `ros-jazzy-irobot-create-msgs` en la máquina que lo llama (`sudo apt update && sudo apt install
+   ros-jazzy-irobot-create-msgs`); sin él da «The passed service type is invalid». Probado: el Create 3 responde sin error.
 3. Con el robot en el dock, el modelo de RViz debe apuntar igual que el real. Si no, queda un desfase fijo: es el yaw
    de `laser_joint` en `hrobot_ld19.urdf.xacro` (o `laser_scan_dir` del driver), no un problema del dock.
 
@@ -71,7 +72,8 @@ src/scripts/rviz_remote.sh [mapping|navigation] [--namespace NS] [--domain ID] [
 permanente.
 
 Argumentos de `mapping.launch.py`: `robot_namespace:=r2  use_sim_time:=false  rviz:=true|false  maps_dir:=~/.create3_maps
-map:=<nombre>  slam_lifecycle:=true|false  lidar_port:=/dev/ttyUSB0  lidar_baudrate:=230400`. Para otro robot,
+map:=<nombre>  slam_lifecycle:=true|false  lidar_port:=/dev/ttyUSB0  lidar_baudrate:=230400  laser_scan_dir:=true|false`
+(`laser_scan_dir:=false` si el scan gira al revés que el robot). Para otro robot,
 `robot_namespace:=r3`; sin namespace, `robot_namespace:=''`.
 
 ## 5. Guardar el mapa

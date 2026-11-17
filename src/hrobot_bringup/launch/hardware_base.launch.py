@@ -40,6 +40,7 @@ def _setup(context, *args, **kwargs):
     use_sim_time = LaunchConfiguration("use_sim_time")
     lidar_port = LaunchConfiguration("lidar_port")
     lidar_baudrate = LaunchConfiguration("lidar_baudrate")
+    laser_scan_dir = LaunchConfiguration("laser_scan_dir")
 
     xacro_file = os.path.join(
         get_package_share_directory("hrobot_description"), "urdf", "hrobot_ld19.urdf.xacro"
@@ -73,7 +74,7 @@ def _setup(context, *args, **kwargs):
                 "port_name": lidar_port,
                 # LaunchConfiguration yields a string: convert so the node receives an integer.
                 "port_baudrate": ParameterValue(lidar_baudrate, value_type=int),
-                "laser_scan_dir": True,
+                "laser_scan_dir": ParameterValue(laser_scan_dir, value_type=bool),
                 "enable_angle_crop_func": False,
                 "angle_crop_min": 135.0,
                 "angle_crop_max": 225.0,
@@ -103,6 +104,11 @@ def generate_launch_description():
                 description="Serial port of the LD19 (consider a udev symlink, e.g. /dev/ldlidar).",
             ),
             DeclareLaunchArgument("lidar_baudrate", default_value="230400"),
+            DeclareLaunchArgument(
+                "laser_scan_dir",
+                default_value="true",
+                description="LD19 scan direction (true|false). Flip it if the scan turns opposite to the robot.",
+            ),
             OpaqueFunction(function=_setup),
         ]
     )
