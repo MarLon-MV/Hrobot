@@ -1,3 +1,8 @@
+# Solo se versiona src/ (y este .gitignore); todo lo demás queda local
+/*
+!/src/
+!/.gitignore
+
 # colcon / ROS 2
 build/
 install/
