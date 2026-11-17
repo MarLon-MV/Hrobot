@@ -50,7 +50,7 @@ ros2 launch hrobot_bringup mapping.launch.py lidar_port:=/dev/ldlidar
 ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r cmd_vel:=/r2/cmd_vel
 
 # 2. Guardar (terminal 3, con el mapeo aún corriendo). Genera maps/sala1.{posegraph,data,yaml,pgm}
-src/scripts/save_map.sh sala1
+src/scripts/save_map.sh nombre_del_mapa
 
 # 3. Parar el mapeo (Ctrl+C) y navegar sobre el mapa guardado
 ros2 launch hrobot_bringup navigation.launch.py map_yaml:=$PWD/maps/sala1.yaml lidar_port:=/dev/ldlidar
