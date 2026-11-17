@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 # Prepara la Raspberry Pi 5 para compilar y ejecutar este workspace.
 #
-# Requisito previo: Ubuntu con ROS 2 Jazzy ya instalado en /opt/ros/jazzy (este script NO instala ROS).
+# Requisito previo: Ubuntu con ROS 2 Jazzy ya instalado en /opt/ros/jazzy (este script NO instala ROS)
+# y con git, colcon y rosdep ya instalados (este script tampoco los instala).
 # Es idempotente: se puede volver a ejecutar sin romper nada.
 #
 # Qué hace:
-#   1. Instala herramientas base (git, colcon, rosdep).
-#   2. Inicializa/actualiza rosdep.
-#   3. Driver del LD19 (rosdep no lo resuelve): si ya hay un `ldlidar_stl_ros2` disponible en el entorno
+#   1. Inicializa/actualiza rosdep.
+#   2. Driver del LD19 (rosdep no lo resuelve): si ya hay un `ldlidar_stl_ros2` disponible en el entorno
 #      (otro workspace ya compilado y cargado), lo reutiliza; si no, lo clona en src/ldlidar_stl_ros2.
-#   4. Permisos del puerto serie: grupo dialout + regla udev con symlink /dev/ldlidar.
-#   5. Red ROS 2: fija ROS_DOMAIN_ID y RMW_IMPLEMENTATION (deben coincidir con los del Create 3),
+#   3. Permisos del puerto serie: grupo dialout + regla udev con symlink /dev/ldlidar.
+#   4. Red ROS 2: fija ROS_DOMAIN_ID y RMW_IMPLEMENTATION (deben coincidir con los del Create 3),
 #      los guarda en ~/.config/create3_bot/ros_net.env y los carga desde ~/.bashrc (bloque marcado, una vez).
-#   6. Instala dependencias con rosdep y compila con colcon.
+#   5. Instala dependencias con rosdep y compila con colcon.
 #
 # Uso:  scripts/setup_pi.sh [--skip-udev] [--skip-build] [--force-driver] [--skip-net]
 #                           [--domain-id N] [--rmw rmw_fastrtps_cpp|rmw_cyclonedds_cpp]
@@ -80,10 +80,6 @@ cd "$REPO_ROOT"
 [ "$(id -u)" -ne 0 ] || die "No lo ejecutes como root; usa tu usuario (el script llama a sudo cuando hace falta)."
 [ -f "/opt/ros/${ROS_DISTRO_NAME}/setup.bash" ] || die "No se encuentra /opt/ros/${ROS_DISTRO_NAME}/setup.bash. Instala ROS 2 ${ROS_DISTRO_NAME} primero."
 [ -d src ] || die "No se encuentra el directorio src/ en ${REPO_ROOT}."
-
-log "Instalando herramientas base (apt)"
-sudo apt-get update
-sudo apt-get install -y git python3-colcon-common-extensions python3-rosdep
 
 log "Inicializando rosdep"
 if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then
