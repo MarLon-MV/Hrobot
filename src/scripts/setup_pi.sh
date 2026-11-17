@@ -168,10 +168,12 @@ rosdep install --from-paths src --ignore-src -y --rosdistro "${ROS_DISTRO_NAME}"
 
 if [ "${SKIP_BUILD}" -eq 0 ]; then
   log "Compilando con colcon (workers: ${JOBS})"
-  build_args=(--symlink-install --parallel-workers "${JOBS}" --packages-skip hrobot_simulation)
+  # Se compila hrobot_bringup y sus dependencias del workspace (hrobot_description y el driver ldlidar_stl_ros2).
+  # hrobot_simulation (Gazebo) queda fuera: es solo del PC de desarrollo.
+  build_args=(--symlink-install --parallel-workers "${JOBS}" --packages-up-to hrobot_bringup)
   if [ "${USE_EXISTING_DRIVER}" -eq 1 ]; then
     # Evita recompilar/sobrescribir el driver del otro workspace si también hay copia en src/.
-    [ -d "${LD_DIR}" ] && build_args+=(ldlidar_stl_ros2)
+    if [ -d "${LD_DIR}" ]; then build_args+=(--packages-skip ldlidar_stl_ros2); fi
   else
     # El driver no incluye <pthread.h> y falla con el GCC de Ubuntu 24.04 (pthread_mutex_* sin declarar).
     build_args+=(--cmake-args "-DCMAKE_CXX_FLAGS=-include pthread.h")

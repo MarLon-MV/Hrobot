@@ -22,6 +22,7 @@
   <exec_depend>nav2_bt_navigator</exec_depend>
   <exec_depend>nav2_regulated_pure_pursuit_controller</exec_depend>
   <exec_depend>nav2_navfn_planner</exec_depend>
+  <exec_depend>nav2_costmap_2d</exec_depend>
   <exec_depend>rclpy</exec_depend>
   <exec_depend>nav_msgs</exec_depend>
   <exec_depend>robot_state_publisher</exec_depend>
@@ -30,6 +31,8 @@
   <exec_depend>teleop_twist_keyboard</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>lifecycle_msgs</exec_depend>
   <!--
     LiDAR LD19 driver. ASSUMPTION: LDRobot's official ROS 2 driver `ldlidar_stl_ros2`
     (https://github.com/ldrobotSensorTeam/ldlidar_stl_ros2). It is NOT a rosdep key, so it must be
