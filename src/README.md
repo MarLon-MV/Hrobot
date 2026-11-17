@@ -1,7 +1,8 @@
 # Workspace `src/`
 
 Workspace ROS 2 Jazzy para un robot **iRobot Create 3 + Raspberry Pi 5 + LiDAR LD19** que mapea entornos
-con **slam_toolbox** y se mueve por **teleoperación** (sin exploración autónoma ni Nav2). Antes de probar con
+con **slam_toolbox** (teleoperación) y navega de forma autónoma sobre el mapa guardado con **AMCL + Nav2** (metas por RViz,
+sin exploración autónoma). Antes de probar con
 el robot real se simula en **Gazebo Harmonic**.
 
 > Estado: nada de esto se ha compilado ni lanzado todavía contra ROS 2 real (se escribió sin ROS 2
@@ -37,15 +38,20 @@ quién publica `scan`, `odom` y TF.
 
 ```bash
 # PC de desarrollo (simulación): ROS 2 Jazzy + Gazebo Harmonic + ros_gz
-sudo apt install ros-jazzy-ros-gz ros-jazzy-slam-toolbox ros-jazzy-teleop-twist-keyboard ros-jazzy-nav2-common ros-jazzy-xacro
+sudo apt install ros-jazzy-ros-gz ros-jazzy-slam-toolbox ros-jazzy-teleop-twist-keyboard ros-jazzy-nav2-common ros-jazzy-navigation2 ros-jazzy-xacro
 colcon build --symlink-install --packages-select create3_bot_description create3_bot_bringup create3_bot_simulation
 source install/setup.bash
 ros2 launch create3_bot_simulation sim.launch.py                 # terminal 1
 ros2 run teleop_twist_keyboard teleop_twist_keyboard             # terminal 2 (mueve el robot)
 
+# Navegación autónoma (AMCL + Nav2) sobre un mapa guardado (maps/mapa1.yaml; ver bringup para guardarlo)
+ros2 launch create3_bot_simulation sim.launch.py nav:=true map_yaml:=$PWD/maps/mapa1.yaml
+# En RViz: "2D Goal Pose" para mandar el robot a un punto (AMCL ya arranca en la pose de spawn)
+
 # Robot real (Raspberry Pi), ver scripts/setup_pi.sh
 ros2 launch create3_bot_bringup mapping.launch.py lidar_port:=/dev/ldlidar
 ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r cmd_vel:=/r2/cmd_vel
+ros2 launch create3_bot_bringup navigation.launch.py map_yaml:=$PWD/maps/mapa1.yaml lidar_port:=/dev/ldlidar   # navegar (2D Pose Estimate en RViz)
 ```
 
 Más detalle en los README de [bringup](create3_bot_bringup/README.md) y
@@ -65,7 +71,7 @@ en su interfaz web (Application > ROS 2). **La simulación corre sin namespace.*
 
 ## Dependencias externas
 
-- ROS 2 Jazzy, `slam_toolbox`, `robot_state_publisher`, `xacro`, `rviz2`, `teleop_twist_keyboard`,
+- ROS 2 Jazzy, `slam_toolbox`, Nav2 (`navigation2`: AMCL, map_server, controller/planner/bt_navigator), `robot_state_publisher`, `xacro`, `rviz2`, `teleop_twist_keyboard`,
   `nav2_common` (solo `RewrittenYaml`/`ReplaceString` para los launch).
 - Simulación: Gazebo Harmonic (`ros-jazzy-ros-gz`: `ros_gz_sim`, `ros_gz_bridge`).
 - Driver del LD19: `ldlidar_stl_ros2` (LDRobot), no está en rosdep: `scripts/setup_pi.sh` lo clona en

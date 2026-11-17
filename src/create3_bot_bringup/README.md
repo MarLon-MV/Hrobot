@@ -75,3 +75,23 @@ absolutas (sin `~`).
 - Los nombres de los campos de `SerializePoseGraph`/`SaveMap` de arriba están escritos de memoria: verifícalos con
   `ros2 interface show`.
 - QoS de `/r2/scan` del driver (best effort vs reliable) debe ser compatible con slam_toolbox.
+
+## Navegación autónoma (AMCL + Nav2)
+
+Sobre un mapa ya guardado (imagen `.yaml`/`.pgm` de `save_map`, ver arriba). No corre slam_toolbox a la vez.
+
+```bash
+ros2 launch create3_bot_bringup navigation.launch.py map_yaml:=$WS/maps/sala1.yaml lidar_port:=/dev/ldlidar
+```
+
+- `nav.launch.py` (sin hardware, lo comparte la simulación): `map_server` + `amcl` (publica `map -> odom`) + Nav2
+  (controller RPP, planner Navfn, smoother, behaviors, bt_navigator) + RViz (`navigation.rviz`).
+  Config en `config/nav2_params.yaml`. `navigation.launch.py` añade `hardware_base` y activa el relé de odom.
+- Pose inicial: "2D Pose Estimate" en RViz, o `set_initial_pose:=true initial_x:=.. initial_y:=.. initial_yaw:=..`.
+  Meta: "2D Goal Pose" en RViz (topic `goal_pose`). Nav2 publica velocidades en `cmd_vel` (`/r2/cmd_vel`).
+- `scripts/odom_relay.py`: el Create 3 publica `/r2/odom` BEST_EFFORT y Nav2 suscribe RELIABLE (no empareja); el relé
+  publica `odom_reliable`, que leen `controller_server` y `bt_navigator`. Comprueba con `ros2 topic info /r2/odom_reliable -v`.
+  Excepción consciente a "solo config/launch": es un script Python, no hay C++.
+- **Sin verificar**: nada de esto se ha lanzado con ROS 2 (no está instalado en el equipo de desarrollo). Pendiente:
+  nombre/tipo del display `nav2_rviz_plugins/ParticleCloud` en RViz, valores de AMCL y RPP con el robot real, y que
+  Nav2 acepte `Twist` en `/r2/cmd_vel` del Create 3.

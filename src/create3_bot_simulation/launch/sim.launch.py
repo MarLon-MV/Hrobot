@@ -1,7 +1,12 @@
 """Gazebo (Harmonic) + robot Create 3/LD19 simulado + slam_toolbox + RViz.
 
 Arguments: world (room.sdf), headless (false), rviz (true), maps_dir, map, slam_lifecycle,
-x/y/yaw (pose de spawn).
+x/y/yaw (pose de spawn), nav (false), map_yaml.
+
+nav:=false (por defecto): slam_toolbox para mapear con teleop.
+nav:=true: navegacion autonoma sobre un mapa guardado (map_server + AMCL + Nav2) en vez de slam_toolbox;
+requiere map_yaml:=<ruta absoluta al .yaml>. AMCL arranca en la pose de spawn (x/y/yaw), que coincide con
+el origen del mapa si este se creo lanzando la simulacion sin mover x/y/yaw.
 
 La simulacion corre SIN namespace (/cmd_vel, /scan, /odom, /map, /tf): igual que el robot real con
 `robot_namespace:=''`. Para mover el robot: teleop (ver README del paquete):
@@ -86,8 +91,25 @@ def generate_launch_description():
         ],
     )
 
+    nav_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(os.path.join(bringup_share, "launch", "nav.launch.py")),
+        launch_arguments={
+            "robot_namespace": "",
+            "use_sim_time": "true",
+            "map_yaml": LaunchConfiguration("map_yaml"),
+            "rviz": LaunchConfiguration("rviz"),
+            "odom_relay": "false",  # el puente de Gazebo ya publica odom RELIABLE
+            "set_initial_pose": "true",
+            "initial_x": LaunchConfiguration("x"),
+            "initial_y": LaunchConfiguration("y"),
+            "initial_yaw": LaunchConfiguration("yaw"),
+        }.items(),
+        condition=IfCondition(LaunchConfiguration("nav")),
+    )
+
     slam = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(bringup_share, "launch", "slam.launch.py")),
+        condition=UnlessCondition(LaunchConfiguration("nav")),
         launch_arguments={
             "robot_namespace": "",
             "use_sim_time": "true",
@@ -112,6 +134,12 @@ def generate_launch_description():
             DeclareLaunchArgument("maps_dir", default_value="~/.create3_maps"),
             DeclareLaunchArgument("map", default_value="", description="Map to extend; empty = new."),
             DeclareLaunchArgument("slam_lifecycle", default_value="true"),
+            DeclareLaunchArgument(
+                "nav", default_value="false", description="true = AMCL + Nav2 en vez de slam_toolbox."
+            ),
+            DeclareLaunchArgument(
+                "map_yaml", default_value="", description="Con nav:=true: ruta absoluta al .yaml."
+            ),
             DeclareLaunchArgument("x", default_value="0.0"),
             DeclareLaunchArgument("y", default_value="0.0"),
             DeclareLaunchArgument("yaw", default_value="0.0"),
@@ -121,6 +149,7 @@ def generate_launch_description():
                 [os.path.dirname(description_share), ":", os.environ.get("GZ_SIM_RESOURCE_PATH", "")],
             ),
             slam,  # first: it validates map:= before any process starts
+            nav_launch,  # idem: valida map_yaml antes de arrancar procesos
             gz_gui,
             gz_headless,
             robot_state_publisher,

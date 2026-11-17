@@ -2,14 +2,14 @@
 
 ## Qué es este repo
 Workspace ROS 2 Jazzy para un robot iRobot Create 3 + Raspberry Pi 5 + LiDAR LD19.
-Misión: mapear entornos con slam_toolbox moviendo el robot por **teleop** (sin exploración autónoma ni Nav2).
+Misión: mapear entornos con slam_toolbox moviendo el robot por **teleop**, y navegar de forma autónoma sobre el mapa guardado con **AMCL + Nav2** (metas por RViz; sin exploración autónoma).
 Antes de probar con el robot real se simula en **Gazebo Harmonic** (`ros_gz`).
 
 ## Paquetes (`src/`)
 | Paquete | Rol |
 |---|---|
 | `create3_bot_description` | URDF/xacro (`base_link`, `laser_frame`; `sim:=true` añade ruedas y plugins de Gazebo) y RViz. |
-| `create3_bot_bringup` | Solo `config/` y `launch/` del robot real (`mapping`, `hardware_base`, `slam`). |
+| `create3_bot_bringup` | `config/` y `launch/` del robot real (`mapping`, `hardware_base`, `slam`, `nav`, `navigation`) más `scripts/odom_relay.py` (relé QoS de odom para Nav2). |
 | `create3_bot_simulation` | Gazebo: mundo, puente `ros_gz_bridge` y `sim.launch.py`. Solo PC de desarrollo; no se compila en la Pi. |
 
 Dependencias permitidas (sin ciclos): `description` ← `bringup` ← `simulation`.
@@ -31,6 +31,7 @@ Dependencias permitidas (sin ciclos): `description` ← `bringup` ← `simulatio
 ```bash
 colcon build --symlink-install --packages-select <paquete>
 ros2 launch create3_bot_simulation sim.launch.py
+ros2 launch create3_bot_simulation sim.launch.py nav:=true map_yaml:=$PWD/maps/mapa1.yaml   # AMCL + Nav2
 ```
 
 ## Tareas

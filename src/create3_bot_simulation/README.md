@@ -6,7 +6,7 @@ teleop antes de usar el robot real. Solo `launch/`, `config/` y `worlds/`.
 ## Requisitos
 
 ```bash
-sudo apt install ros-jazzy-ros-gz ros-jazzy-slam-toolbox ros-jazzy-teleop-twist-keyboard ros-jazzy-nav2-common ros-jazzy-xacro
+sudo apt install ros-jazzy-ros-gz ros-jazzy-slam-toolbox ros-jazzy-teleop-twist-keyboard ros-jazzy-nav2-common ros-jazzy-navigation2 ros-jazzy-xacro
 ```
 
 ## Uso
@@ -21,6 +21,9 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard                   # otra te
 
 Argumentos de `sim.launch.py`: `world` (por defecto `worlds/room.sdf`), `headless:=true` (Gazebo sin GUI),
 `rviz:=false`, `x`, `y`, `yaw` (pose de spawn), `maps_dir`, `map`, `slam_lifecycle`.
+Navegación autónoma: `nav:=true map_yaml:=<ruta absoluta .yaml>` lanza map_server + AMCL + Nav2 en lugar de
+slam_toolbox; AMCL arranca en la pose de spawn (`x`/`y`/`yaw`), que debe coincidir con el origen del mapa guardado
+(un mapa hecho con el spawn por defecto parte de 0,0,0). Manda metas con "2D Goal Pose" de RViz.
 Guardar/ampliar mapas: igual que en el robot real (ver bringup), sin namespace
 (`/slam_toolbox/serialize_map`).
 
