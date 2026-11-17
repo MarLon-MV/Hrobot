@@ -92,6 +92,3 @@ ros2 launch create3_bot_bringup navigation.launch.py map_yaml:=$WS/maps/sala1.ya
 - `scripts/odom_relay.py`: el Create 3 publica `/r2/odom` BEST_EFFORT y Nav2 suscribe RELIABLE (no empareja); el relé
   publica `odom_reliable`, que leen `controller_server` y `bt_navigator`. Comprueba con `ros2 topic info /r2/odom_reliable -v`.
   Excepción consciente a "solo config/launch": es un script Python, no hay C++.
-- **Sin verificar**: nada de esto se ha lanzado con ROS 2 (no está instalado en el equipo de desarrollo). Pendiente:
-  nombre/tipo del display `nav2_rviz_plugins/ParticleCloud` en RViz, valores de AMCL y RPP con el robot real, y que
-  Nav2 acepte `Twist` en `/r2/cmd_vel` del Create 3.
