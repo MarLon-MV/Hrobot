@@ -19,7 +19,7 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r cmd_vel:=/r2/
 | Launch | Contenido |
 |---|---|
 | `mapping.launch.py` | Robot real: `hardware_base` + `slam`. |
-| `hardware_base.launch.py` | `robot_state_publisher` (xacro, `sim:=false`) + driver LD19. El Create 3 no se lanza aquí. |
+| `hardware_base.launch.py` | `robot_state_publisher` (xacro, `sim:=false`) + driver LD19 (publica `scan_raw`) + `scan_resampler` (publica `scan`). El Create 3 no se lanza aquí. |
 | `slam.launch.py` | `slam_toolbox` + RViz (`mapping.rviz`). Lo reutiliza `hrobot_simulation`. |
 | `hrobot_namespace.py` | Módulo auxiliar de namespace (no es un launch). |
 
@@ -84,6 +84,21 @@ ros2 launch hrobot_bringup navigation.launch.py map_yaml:=$PWD/maps/sala1.yaml l
 de slam_toolbox, no sobrescribe sin `--force` y comprueba que los cuatro archivos existan. No corras mapping y
 navigation a la vez: ambos publican `map -> odom`.
 
+## Calibrar la orientación: arrancar siempre desde el dock
+
+El frame `map` nace en la pose del robot al arrancar el mapeo, así que si cada vez empieza en un sitio distinto el
+modelo de RViz no coincide con el real. Para tener una referencia repetible (y la que exige ampliar un mapa con
+`map:=...`, que usa `map_start_at_dock`):
+
+1. Pon el robot **en el dock** antes de lanzar `mapping.launch.py` (no lo muevas hasta que RViz muestre el mapa).
+2. Opcional, si el Create 3 lleva tiempo encendido y su odometría ya se movió, ponla a cero **antes** de lanzar el mapeo:
+   ```bash
+   ros2 service call /r2/reset_pose irobot_create_msgs/srv/ResetPose "{pose: {position: {x: 0.0, y: 0.0, z: 0.0}, orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}}"
+   ```
+   (Verifica los campos con `ros2 interface show irobot_create_msgs/srv/ResetPose`. No lo llames con slam_toolbox corriendo.)
+3. Con el robot en el dock, el modelo de RViz debe apuntar igual que el real. Si no, queda un desfase fijo: es el yaw de
+   `laser_joint` en `hrobot_ld19.urdf.xacro` (o `laser_scan_dir` del driver), no un problema del dock.
+
 ## Guardar y ampliar un mapa (manual)
 
 Con slam_toolbox corriendo (ajusta el namespace; los nombres son rutas en la máquina donde corre slam_toolbox):
@@ -118,7 +133,10 @@ absolutas (sin `~`).
 - **slam_toolbox lifecycle**: en Jazzy `async_slam_toolbox_node` es lifecycle; si no lo es, `slam_lifecycle:=false`.
 - Los nombres de los campos de `SerializePoseGraph`/`SaveMap` de arriba están escritos de memoria: verifícalos con
   `ros2 interface show`.
-- QoS de `/r2/scan` del driver (best effort vs reliable) debe ser compatible con slam_toolbox.
+- `scripts/scan_resampler.py`: el LD19 da 500-504 rayos por vuelta y slam_toolbox avisa `LaserRangeScan contains N range
+  readings, expected 504`. El driver publica `scan_raw` y el nodo republica `scan` con 504 rayos fijos (0..2π, vecino más
+  cercano; parámetro `num_beams`). Comprueba que el aviso desaparezca y que `ros2 topic hz /r2/scan` siga en ~10 Hz.
+- QoS de `/r2/scan_raw` del driver (best effort vs reliable) debe ser compatible con slam_toolbox.
 
 ## Navegación autónoma (AMCL + Nav2)
 

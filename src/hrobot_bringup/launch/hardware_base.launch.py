@@ -57,8 +57,9 @@ def _setup(context, *args, **kwargs):
         remappings=tf_remappings(namespace),
     )
 
-    # Publishes sensor_msgs/LaserScan on `scan` (/<ns>/scan; /scan without namespace) with
-    # frame laser_frame (defined in the xacro).
+    # Publishes sensor_msgs/LaserScan on `scan_raw` with frame laser_frame (defined in the xacro). The LD19
+    # returns 500-504 beams per turn, which slam_toolbox rejects, so scan_resampler republishes it as
+    # `scan` (/<ns>/scan; /scan without namespace) with a fixed beam count.
     ldlidar = Node(
         package="ldlidar_stl_ros2",
         executable="ldlidar_stl_ros2_node",
@@ -67,7 +68,7 @@ def _setup(context, *args, **kwargs):
         parameters=[
             {
                 "product_name": "LDLiDAR_LD19",
-                "topic_name": "scan",
+                "topic_name": "scan_raw",
                 "frame_id": "laser_frame",
                 "port_name": lidar_port,
                 # LaunchConfiguration yields a string: convert so the node receives an integer.
@@ -80,7 +81,15 @@ def _setup(context, *args, **kwargs):
         ],
     )
 
-    return namespaced(namespace, [robot_state_publisher, ldlidar])
+    scan_resampler = Node(
+        package="hrobot_bringup",
+        executable="scan_resampler.py",
+        name="scan_resampler",
+        output="screen",
+        parameters=[{"input_topic": "scan_raw", "output_topic": "scan", "num_beams": 504}],
+    )
+
+    return namespaced(namespace, [robot_state_publisher, ldlidar, scan_resampler])
 
 
 def generate_launch_description():
