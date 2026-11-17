@@ -74,7 +74,7 @@ case "${RMW_NAME}" in
   *) echo "RMW no soportado: ${RMW_NAME} (usa rmw_fastrtps_cpp o rmw_cyclonedds_cpp)" >&2; exit 2 ;;
 esac
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
 [ "$(id -u)" -ne 0 ] || die "No lo ejecutes como root; usa tu usuario (el script llama a sudo cuando hace falta)."
@@ -191,8 +191,7 @@ Siguientes pasos:
   source ${REPO_ROOT}/install/setup.bash
   ls -l /dev/ldlidar            # o /dev/ttyUSB0 si no usas la regla udev
   echo \$ROS_DOMAIN_ID \$RMW_IMPLEMENTATION   # ${ROS_DOMAIN_ID-?} ${RMW_IMPLEMENTATION-?}; deben coincidir con el Create 3
-  scripts/set_robot.sh r2       # opcional: fija el namespace del robot (por defecto r2; no cambia el del Create 3)
-  scripts/set_robot.sh --check  # comprueba que existen /<namespace>/odom y /<namespace>/cmd_vel
+  ros2 topic list | grep -E '/r2/(odom|cmd_vel)'   # comprueba los topics del Create 3
   ros2 launch create3_bot_bringup mapping.launch.py lidar_port:=/dev/ldlidar
   # otro robot sin tocar el entorno: ... mapping.launch.py robot_namespace:=r3
 Namespace en esta terminal: ${CREATE3_ROBOT_NAMESPACE-r2} (variable CREATE3_ROBOT_NAMESPACE o 'r2'). Todo el stack cuelga de él: /r2/scan, /r2/map,
