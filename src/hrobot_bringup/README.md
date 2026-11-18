@@ -130,9 +130,12 @@ Para el mapeo antes (Ctrl+C): mapping y navigation a la vez publican `map -> odo
 ros2 launch hrobot_bringup navigation.launch.py map_yaml:=$PWD/src/maps/sala1.yaml lidar_port:=/dev/ldlidar
 ```
 
-- En RViz: "2D Pose Estimate" (pose inicial) y luego "2D Goal Pose" (topic `goal_pose`). La pose inicial también se
-  puede dar con `set_initial_pose:=true initial_x:=.. initial_y:=.. initial_yaw:=..`. Nav2 publica velocidades en
-  `cmd_vel` (`/r2/cmd_vel`).
+- **Pose inicial (como en la simulación):** por defecto AMCL arranca ya en `initial_x/y/yaw` = `0 0 0`, el origen del
+  mapa, o sea el dock desde el que se mapeó. Pon el robot en el dock antes de lanzar y manda metas directamente con
+  "2D Goal Pose" (topic `goal_pose`). Si el robot está en otro sitio, pasa `initial_x:=.. initial_y:=.. initial_yaw:=..`
+  (en el frame del mapa) o `set_initial_pose:=false` y fíjala con "2D Pose Estimate" en RViz. Arrancar con la pose ya
+  puesta también evita que Nav2 se quede a medio activar esperando `map -> base_link`.
+- Nav2 publica velocidades en `cmd_vel` (`/r2/cmd_vel`).
 - `nav.launch.py`: `map_server` + `amcl` (publica `map -> odom`) + Nav2 (controller RPP, planner Navfn, smoother,
   behaviors, bt_navigator) + RViz. Config en `config/nav2_params.yaml`. `navigation.launch.py` añade `hardware_base` y
   activa el relé de odom.

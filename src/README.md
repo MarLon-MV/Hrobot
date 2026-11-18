@@ -51,7 +51,7 @@ ros2 launch hrobot_simulation sim.launch.py nav:=true map_yaml:=$PWD/src/maps/ma
 # Robot real (Raspberry Pi), ver src/scripts/setup_pi.sh
 ros2 launch hrobot_bringup mapping.launch.py lidar_port:=/dev/ldlidar
 ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r cmd_vel:=/r2/cmd_vel
-ros2 launch hrobot_bringup navigation.launch.py map_yaml:=$PWD/src/maps/mapa1.yaml lidar_port:=/dev/ldlidar   # navegar (2D Pose Estimate en RViz)
+ros2 launch hrobot_bringup navigation.launch.py map_yaml:=$PWD/src/maps/mapa1.yaml lidar_port:=/dev/ldlidar   # navegar (AMCL arranca en el dock, origen del mapa)
 ```
 
 Más detalle en los README de [bringup](hrobot_bringup/README.md) y
