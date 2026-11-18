@@ -44,14 +44,14 @@ source install/setup.bash
 ros2 launch hrobot_simulation sim.launch.py                 # terminal 1
 ros2 run teleop_twist_keyboard teleop_twist_keyboard             # terminal 2 (mueve el robot)
 
-# Navegación autónoma (AMCL + Nav2) sobre un mapa guardado (maps/mapa1.yaml; ver bringup para guardarlo)
-ros2 launch hrobot_simulation sim.launch.py nav:=true map_yaml:=$PWD/maps/mapa1.yaml
+# Navegación autónoma (AMCL + Nav2) sobre un mapa guardado (src/maps/mapa1.yaml; ver bringup para guardarlo)
+ros2 launch hrobot_simulation sim.launch.py nav:=true map_yaml:=$PWD/src/maps/mapa1.yaml
 # En RViz: "2D Goal Pose" para mandar el robot a un punto (AMCL ya arranca en la pose de spawn)
 
 # Robot real (Raspberry Pi), ver src/scripts/setup_pi.sh
 ros2 launch hrobot_bringup mapping.launch.py lidar_port:=/dev/ldlidar
 ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r cmd_vel:=/r2/cmd_vel
-ros2 launch hrobot_bringup navigation.launch.py map_yaml:=$PWD/maps/mapa1.yaml lidar_port:=/dev/ldlidar   # navegar (2D Pose Estimate en RViz)
+ros2 launch hrobot_bringup navigation.launch.py map_yaml:=$PWD/src/maps/mapa1.yaml lidar_port:=/dev/ldlidar   # navegar (2D Pose Estimate en RViz)
 ```
 
 Más detalle en los README de [bringup](hrobot_bringup/README.md) y

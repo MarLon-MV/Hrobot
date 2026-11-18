@@ -81,20 +81,29 @@ map:=<nombre>  slam_lifecycle:=true|false  lidar_port:=/dev/ttyUSB0  lidar_baudr
 Con el mapeo aún corriendo (Pi, terminal 3):
 
 ```bash
-src/scripts/save_map.sh nombre_del_mapa [--maps-dir DIR] [--namespace NS] [--force]
+src/scripts/save_map.sh nombre_del_mapa [--maps-dir DIR] [--namespace NS] [--force] [--pull usuario@host] [--remote-ws DIR]
 ```
 
-Genera `maps/<nombre>.{posegraph,data,yaml,pgm}` llamando a los servicios `serialize_map` y `save_map` de
-slam_toolbox; no sobrescribe sin `--force` y comprueba que existan los cuatro archivos. Corre en la máquina donde corre
-slam_toolbox.
+Genera `src/maps/<nombre>.{posegraph,data,yaml,pgm}` llamando a los servicios `serialize_map` y `save_map` de
+slam_toolbox; muestra la respuesta de cada servicio, no sobrescribe sin `--force` y comprueba que existan los cuatro
+archivos.
+
+slam_toolbox escribe los archivos en la máquina donde corre. Dos formas de usarlo:
+
+- **En la Pi** (donde corre slam_toolbox): `src/scripts/save_map.sh sala1`. Después copia los archivos a tu portátil
+  con `scp`.
+- **Desde el portátil**: `src/scripts/save_map.sh sala1 --pull robot2@<IP_PI>` guarda en `<remote-ws>/src/maps` de la Pi
+  (`--remote-ws`, por defecto `~/Hrobot`) y copia los cuatro archivos a `src/maps` del portátil. Necesita `ssh` a la Pi.
+  Sin `--pull`, el script avisa de que no hay slam_toolbox local y, si faltan los archivos, explica que se guardaron en
+  la otra máquina.
 
 <details>
 <summary>Equivalente manual</summary>
 
 ```bash
-WS=$PWD   # los mapas quedan en <workspace>/maps
-ros2 service call /r2/slam_toolbox/serialize_map slam_toolbox/srv/SerializePoseGraph "{filename: '$WS/maps/sala1'}"
-ros2 service call /r2/slam_toolbox/save_map slam_toolbox/srv/SaveMap "{name: {data: '$WS/maps/sala1'}}"
+WS=$PWD   # los mapas quedan en <workspace>/src/maps
+ros2 service call /r2/slam_toolbox/serialize_map slam_toolbox/srv/SerializePoseGraph "{filename: '$WS/src/maps/sala1'}"
+ros2 service call /r2/slam_toolbox/save_map slam_toolbox/srv/SaveMap "{name: {data: '$WS/src/maps/sala1'}}"
 ```
 
 Los nombres de los campos están escritos de memoria: verifícalos con `ros2 interface show`.
@@ -105,7 +114,7 @@ Los nombres de los campos están escritos de memoria: verifícalos con `ros2 int
 Para el mapeo, pon el robot en el dock/origen del mapa y relanza el mapeo con el mapa cargado:
 
 ```bash
-ros2 launch hrobot_bringup mapping.launch.py map:=sala1 maps_dir:=$PWD/maps
+ros2 launch hrobot_bringup mapping.launch.py map:=sala1 maps_dir:=$PWD/src/maps
 ```
 
 slam_toolbox carga `<maps_dir>/<nombre>.posegraph` (`map_start_at_dock: true`, modo mapping). Si el pose graph no existe
@@ -117,7 +126,7 @@ Después vuelve al paso 5 para guardar.
 Para el mapeo antes (Ctrl+C): mapping y navigation a la vez publican `map -> odom`.
 
 ```bash
-ros2 launch hrobot_bringup navigation.launch.py map_yaml:=$PWD/maps/sala1.yaml lidar_port:=/dev/ldlidar
+ros2 launch hrobot_bringup navigation.launch.py map_yaml:=$PWD/src/maps/sala1.yaml lidar_port:=/dev/ldlidar
 ```
 
 - En RViz: "2D Pose Estimate" (pose inicial) y luego "2D Goal Pose" (topic `goal_pose`). La pose inicial también se
