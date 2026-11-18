@@ -15,6 +15,9 @@
   <xacro:property name="laser_x" value="0.0"/>
   <xacro:property name="laser_y" value="0.0"/>
   <xacro:property name="laser_z" value="0.12"/>
+  <!-- Yaw of laser_frame relative to base_link (rad). Real LD19: measured in RViz, its 0 deg ray points to
+       the robot's right, hence -pi/2. The simulated lidar already looks forward: sim.launch.py passes 0. -->
+  <xacro:arg name="laser_yaw" default="-1.5707963"/>
 
   <!-- Create 3 drive geometry (used only in simulation) -->
   <xacro:property name="wheel_radius" value="0.03575"/>
@@ -95,7 +98,7 @@
   <joint name="laser_joint" type="fixed">
     <parent link="base_link"/>
     <child link="laser_frame"/>
-    <origin xyz="${laser_x} ${laser_y} ${laser_z}" rpy="0 0 0"/>
+    <origin xyz="${laser_x} ${laser_y} ${laser_z}" rpy="0 0 $(arg laser_yaw)"/>
   </joint>
 
   <xacro:if value="$(arg sim)">

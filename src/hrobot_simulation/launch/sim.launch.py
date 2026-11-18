@@ -42,7 +42,7 @@ def generate_launch_description():
 
     xacro_file = os.path.join(description_share, "urdf", "hrobot_ld19.urdf.xacro")
     robot_description = ParameterValue(
-        Command([FindExecutable(name="xacro"), " ", xacro_file, " sim:=true"]), value_type=str
+        Command([FindExecutable(name="xacro"), " ", xacro_file, " sim:=true laser_yaw:=0"]), value_type=str
     )
 
     # Gazebo server + GUI (-r: start running). headless: server only (-s), no GUI.
