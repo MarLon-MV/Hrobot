@@ -73,14 +73,3 @@ in zijn webinterface (Application > ROS 2). **De simulatie draait zonder namespa
   `src/sllidar_ros2` (genegeerd door git).
 - Create 3 bereikbaar via het netwerk met dezelfde `ROS_DOMAIN_ID` en RMW als de RPi5.
 
-## Openstaand voor de eerste uitvoering
-
-1. `colcon build` en `sim.launch.py` op de pc: controleer dat de robot in Gazebo verschijnt, dat `ros2 topic echo /scan`
-   en `/odom` antwoorden en dat `ros2 run tf2_tools view_frames` `map → odom → base_link → laser_frame` toont.
-2. Bevestig of `async_slam_toolbox_node` een lifecycle-node is in de geïnstalleerde versie (zo niet, `slam_lifecycle:=false`).
-3. Echte robot: QoS van `/r2/scan` van de driver (best effort vs reliable, `ros2 topic info /r2/scan -v`), draairichting
-   (`laser_inverted`), welke scanmodus de RPLIDAR C1 gebruikt (`lidar_scan_mode`) en `/r2/odom` van de Create 3
-   (BEST_EFFORT; slam_toolbox gebruikt alleen TF).
-4. De echte positie en oriëntatie van de LiDAR meten (`laser_x/y/z` en `laser_yaw` in de xacro; `laser_z` = 0,12 m en
-   `laser_yaw` = 0 zijn aannames).
-5. De maintainer `dev@example.com` in de `package.xml`-bestanden vervangen.
