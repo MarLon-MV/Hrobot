@@ -73,12 +73,3 @@ en su interfaz web (Application > ROS 2). **La simulación corre sin namespace.*
   `src/ldlidar_stl_ros2` (ignorado por git).
 - Create 3 accesible por red con el mismo `ROS_DOMAIN_ID` y RMW que la RPi5.
 
-## Pendientes de la primera ejecución
-
-1. `colcon build` y `sim.launch.py` en el PC: comprobar que el robot aparece en Gazebo, que `ros2 topic echo /scan`
-   y `/odom` responden y que `ros2 run tf2_tools view_frames` muestra `map → odom → base_link → laser_frame`.
-2. Confirmar si `async_slam_toolbox_node` es lifecycle en la versión instalada (si no, `slam_lifecycle:=false`).
-3. Robot real: QoS de `/r2/scan` del driver (best effort vs reliable, `ros2 topic info /r2/scan -v`), sentido de
-   giro (`laser_scan_dir`), y `/r2/odom` del Create 3 (BEST_EFFORT; slam_toolbox solo usa TF).
-4. Medir la posición real del LiDAR (`laser_x/y/z` en el xacro; `laser_z` = 0.12 m es supuesto).
-5. Sustituir el maintainer `dev@example.com` de los `package.xml`.
