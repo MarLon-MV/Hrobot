@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Republica nav_msgs/Odometry de BEST_EFFORT a RELIABLE.
+"""Publiceert nav_msgs/Odometry opnieuw van BEST_EFFORT naar RELIABLE.
 
-El Create 3 publica /<ns>/odom BEST_EFFORT depth 1; controller_server y bt_navigator de Nav2 suscriben
-RELIABLE y nunca emparejan con ese publicador. Este nodo suscribe con QoS de sensor y republica el mismo
-mensaje en `odom_reliable` (relativo: respeta el namespace). Solo se usa con el robot real.
+De Create 3 publiceert /<ns>/odom als BEST_EFFORT met depth 1; controller_server en bt_navigator van Nav2
+abonneren zich als RELIABLE en koppelen daardoor nooit met die publisher. Deze node abonneert zich met
+sensor-QoS en publiceert hetzelfde bericht opnieuw op `odom_reliable` (relatief: respecteert de namespace).
+Wordt alleen met de echte robot gebruikt.
 """
 
 import rclpy

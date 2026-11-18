@@ -1,19 +1,19 @@
-"""Gazebo (Harmonic) + robot Create 3/LD19 simulado + slam_toolbox + RViz.
+"""Gazebo (Harmonic) + gesimuleerde Create 3/RPLIDAR C1-robot + slam_toolbox + RViz.
 
-Arguments: world (room.sdf), headless (false), rviz (true), maps_dir, map, slam_lifecycle,
-x/y/yaw (pose de spawn), nav (false), localization (amcl), map_yaml.
+Argumenten: world (room.sdf), headless (false), rviz (true), maps_dir, map, slam_lifecycle,
+x/y/yaw (spawn-pose), nav (false), localization (amcl), map_yaml.
 
-nav:=false (por defecto): slam_toolbox para mapear con teleop.
-nav:=true: navegacion autonoma sobre un mapa guardado (map_server + AMCL + Nav2) en vez de slam_toolbox;
-requiere map_yaml:=<ruta absoluta al .yaml>. AMCL arranca en la pose de spawn (x/y/yaw), que coincide con
-el origen del mapa si este se creo lanzando la simulacion sin mover x/y/yaw.
-nav:=true localization:=slam: mapear y navegar a la vez (slam_toolbox + Nav2 sobre el /map vivo, sin AMCL ni
-map_yaml; un solo RViz, el de navegacion).
+nav:=false (standaard): slam_toolbox om met teleop te kaarten.
+nav:=true: autonome navigatie op een opgeslagen kaart (map_server + AMCL + Nav2) in plaats van slam_toolbox;
+vereist map_yaml:=<absoluut pad naar het .yaml>. AMCL start op de spawn-pose (x/y/yaw), die samenvalt met
+de oorsprong van de kaart als die is gemaakt door de simulatie te starten zonder x/y/yaw te wijzigen.
+nav:=true localization:=slam: tegelijk kaarten en navigeren (slam_toolbox + Nav2 op de levende /map, zonder
+AMCL of map_yaml; één enkele RViz, die van navigatie).
 
-La simulacion corre SIN namespace (/cmd_vel, /scan, /odom, /map, /tf): igual que el robot real con
-`robot_namespace:=''`. Para mover el robot: teleop (ver README del paquete):
+De simulatie draait ZONDER namespace (/cmd_vel, /scan, /odom, /map, /tf): gelijk aan de echte robot met
+`robot_namespace:=''`. Om de robot te bewegen: teleop (zie README van het pakket):
     ros2 run teleop_twist_keyboard teleop_twist_keyboard
-Todos los nodos ROS usan use_sim_time:=true (reloj de Gazebo via /clock).
+Alle ROS-nodes gebruiken use_sim_time:=true (Gazebo-klok via /clock).
 """
 
 import os
@@ -43,12 +43,12 @@ def generate_launch_description():
     world = LaunchConfiguration("world")
     headless = LaunchConfiguration("headless")
 
-    xacro_file = os.path.join(description_share, "urdf", "hrobot_ld19.urdf.xacro")
+    xacro_file = os.path.join(description_share, "urdf", "hrobot_rplidar_c1.urdf.xacro")
     robot_description = ParameterValue(
         Command([FindExecutable(name="xacro"), " ", xacro_file, " sim:=true laser_yaw:=0"]), value_type=str
     )
 
-    # Gazebo server + GUI (-r: start running). headless: server only (-s), no GUI.
+    # Gazebo-server + GUI (-r: meteen draaien). headless: alleen server (-s), geen GUI.
     gz_sim_launch = os.path.join(ros_gz_sim_share, "launch", "gz_sim.launch.py")
     gz_gui = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(gz_sim_launch),
@@ -102,7 +102,7 @@ def generate_launch_description():
             "localization": LaunchConfiguration("localization"),
             "map_yaml": LaunchConfiguration("map_yaml"),
             "rviz": LaunchConfiguration("rviz"),
-            "odom_relay": "false",  # el puente de Gazebo ya publica odom RELIABLE
+            "odom_relay": "false",  # de Gazebo-brug publiceert odom al als RELIABLE
             "set_initial_pose": "true",
             "initial_x": LaunchConfiguration("x"),
             "initial_y": LaunchConfiguration("y"),
@@ -113,7 +113,7 @@ def generate_launch_description():
 
     slam = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(bringup_share, "launch", "slam.launch.py")),
-        # slam corre si no se navega (nav:=false) o si se navega sobre el mapa vivo (localization:=slam).
+        # slam draait als er niet genavigeerd wordt (nav:=false) of als er op de levende kaart genavigeerd wordt (localization:=slam).
         condition=IfCondition(
             PythonExpression(
                 ["'", LaunchConfiguration("nav"), "' != 'true' or '", LaunchConfiguration("localization"), "' == 'slam'"]
@@ -122,7 +122,7 @@ def generate_launch_description():
         launch_arguments={
             "robot_namespace": "",
             "use_sim_time": "true",
-            # con nav:=true el RViz es el de nav.launch.py (uno solo)
+            # met nav:=true is de RViz die van nav.launch.py (slechts één)
             "rviz": PythonExpression(
                 ["'false' if '", LaunchConfiguration("nav"), "' == 'true' else '", LaunchConfiguration("rviz"), "'"]
             ),
@@ -137,36 +137,36 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "world",
                 default_value=PathJoinSubstitution([sim_share, "worlds", "room.sdf"]),
-                description="Path to the Gazebo world (.sdf).",
+                description="Pad naar de Gazebo-wereld (.sdf).",
             ),
             DeclareLaunchArgument(
-                "headless", default_value="false", description="true = Gazebo without GUI."
+                "headless", default_value="false", description="true = Gazebo zonder GUI."
             ),
             DeclareLaunchArgument("rviz", default_value="true", description="true|false"),
             DeclareLaunchArgument("maps_dir", default_value="~/.create3_maps"),
-            DeclareLaunchArgument("map", default_value="", description="Map to extend; empty = new."),
+            DeclareLaunchArgument("map", default_value="", description="Uit te breiden kaart; leeg = nieuwe kaart."),
             DeclareLaunchArgument("slam_lifecycle", default_value="true"),
             DeclareLaunchArgument(
-                "nav", default_value="false", description="true = AMCL + Nav2 en vez de slam_toolbox."
+                "nav", default_value="false", description="true = AMCL + Nav2 in plaats van slam_toolbox."
             ),
             DeclareLaunchArgument(
                 "localization",
                 default_value="amcl",
-                description="Con nav:=true: amcl (mapa guardado, map_yaml) o slam (mapear y navegar a la vez).",
+                description="Met nav:=true: amcl (opgeslagen kaart, map_yaml) of slam (tegelijk kaarten en navigeren).",
             ),
             DeclareLaunchArgument(
-                "map_yaml", default_value="", description="Con nav:=true localization:=amcl: ruta absoluta al .yaml."
+                "map_yaml", default_value="", description="Met nav:=true localization:=amcl: absoluut pad naar het .yaml."
             ),
             DeclareLaunchArgument("x", default_value="0.0"),
             DeclareLaunchArgument("y", default_value="0.0"),
             DeclareLaunchArgument("yaw", default_value="0.0"),
-            # Gazebo resolves package://hrobot_description/meshes/... through this path.
+            # Gazebo lost package://hrobot_description/meshes/... op via dit pad.
             SetEnvironmentVariable(
                 "GZ_SIM_RESOURCE_PATH",
                 [os.path.dirname(description_share), ":", os.environ.get("GZ_SIM_RESOURCE_PATH", "")],
             ),
-            slam,  # first: it validates map:= before any process starts
-            nav_launch,  # idem: valida map_yaml antes de arrancar procesos
+            slam,  # eerst: valideert map:= voordat een proces start
+            nav_launch,  # idem: valideert map_yaml voordat processen starten
             gz_gui,
             gz_headless,
             robot_state_publisher,

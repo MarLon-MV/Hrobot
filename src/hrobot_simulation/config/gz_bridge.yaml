@@ -1,5 +1,5 @@
-# ros_gz_bridge (parameter_bridge) config. Topics are global (/cmd_vel, /scan, ...): the simulation
-# runs without robot namespace. direction: GZ_TO_ROS | ROS_TO_GZ | BIDIRECTIONAL.
+# Configuratie van ros_gz_bridge (parameter_bridge). Topics zijn globaal (/cmd_vel, /scan, ...): de simulatie
+# draait zonder robot-namespace. direction: GZ_TO_ROS | ROS_TO_GZ | BIDIRECTIONAL.
 - ros_topic_name: /clock
   gz_topic_name: /clock
   ros_type_name: rosgraph_msgs/msg/Clock
@@ -18,7 +18,7 @@
   gz_type_name: gz.msgs.Odometry
   direction: GZ_TO_ROS
 
-# odom -> base_link published by the DiffDrive plugin.
+# odom -> base_link wordt gepubliceerd door de DiffDrive-plugin.
 - ros_topic_name: /tf
   gz_topic_name: /tf
   ros_type_name: tf2_msgs/msg/TFMessage

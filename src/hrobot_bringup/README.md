@@ -1,199 +1,205 @@
 # hrobot_bringup
 
-`config/` y `launch/` para el robot **real** (Create 3 + RPi5 + LiDAR LD19), más dos scripts Python auxiliares
-(`scan_resampler.py`, `odom_relay.py`; no hay C++). Mapea con slam_toolbox moviendo el robot por teleop y navega sobre
-el mapa guardado con AMCL + Nav2.
+`config/` en `launch/` voor de **echte** robot (Create 3 + RPi5 + SLAMTEC RPLIDAR C1), plus twee Python-hulpscripts
+(`scan_resampler.py`, `odom_relay.py`; er is geen C++). Brengt in kaart met slam_toolbox door de robot via teleop te
+bewegen en navigeert op de opgeslagen kaart met AMCL + Nav2.
 
-| Launch / script | Contenido |
+| Launch / script | Inhoud |
 |---|---|
-| `mapping.launch.py` | Robot real: `hardware_base` + `slam`. |
-| `navigation.launch.py` | Robot real: `hardware_base` + `nav` + relé de odom. |
-| `mapping_navigation.launch.py` | Robot real: mapear y navegar a la vez: `hardware_base` + `slam` + `nav` (`localization:=slam`). |
-| `hardware_base.launch.py` | `robot_state_publisher` (xacro, `sim:=false`) + driver LD19 (publica `scan_raw`) + `scan_resampler` (publica `scan`). El Create 3 no se lanza aquí. |
-| `slam.launch.py` | `slam_toolbox` + RViz (`mapping.rviz`). Lo reutiliza `hrobot_simulation`. |
-| `nav.launch.py` | `map_server` + `amcl` + Nav2 + RViz (`navigation.rviz`), sin hardware. Lo reutiliza la simulación. |
-| `hrobot_namespace.py` | Módulo auxiliar de namespace (no es un launch). |
-| `scripts/scan_resampler.py` | `scan_raw` -> `scan` con 504 rayos fijos. |
-| `scripts/odom_relay.py` | `odom` (BEST_EFFORT) -> `odom_reliable`, para Nav2. |
+| `mapping.launch.py` | Echte robot: `hardware_base` + `slam`. |
+| `navigation.launch.py` | Echte robot: `hardware_base` + `nav` + odom-relay. |
+| `mapping_navigation.launch.py` | Echte robot: tegelijk kaarten en navigeren: `hardware_base` + `slam` + `nav` (`localization:=slam`). |
+| `hardware_base.launch.py` | `robot_state_publisher` (xacro, `sim:=false`) + driver van de RPLIDAR C1 (publiceert `scan_raw`) + `scan_resampler` (publiceert `scan`). De Create 3 wordt hier niet gestart. |
+| `slam.launch.py` | `slam_toolbox` + RViz (`mapping.rviz`). Wordt hergebruikt door `hrobot_simulation`. |
+| `nav.launch.py` | `map_server` + `amcl` + Nav2 + RViz (`navigation.rviz`), zonder hardware. Wordt hergebruikt door de simulatie. |
+| `hrobot_namespace.py` | Hulpmodule voor namespaces (geen launch). |
+| `scripts/scan_resampler.py` | `scan_raw` -> `scan` met 360 vaste stralen. |
+| `scripts/odom_relay.py` | `odom` (BEST_EFFORT) -> `odom_reliable`, voor Nav2. |
 
-## 1. Preparar la Pi (una vez)
+## 1. De Pi voorbereiden (eenmalig)
 
-Desde la raíz del workspace en la Pi:
+Vanuit de root van de workspace op de Pi:
 
 ```bash
 src/scripts/setup_pi.sh [--domain-id N] [--rmw rmw_fastrtps_cpp|rmw_cyclonedds_cpp] [--skip-net]
 ```
 
-Instala dependencias y el driver LD19, crea la regla udev `/dev/ldlidar`, **fija `ROS_DOMAIN_ID` y
-`RMW_IMPLEMENTATION`** (`~/.config/hrobot/ros_net.env`, cargado desde `~/.bashrc`) y compila. Después abre una terminal
-nueva y `source install/setup.bash`.
+Installeert afhankelijkheden en de driver van de RPLIDAR C1, maakt de udev-regel `/dev/rplidar`, **stelt `ROS_DOMAIN_ID` en
+`RMW_IMPLEMENTATION` in** (`~/.config/hrobot/ros_net.env`, geladen vanuit `~/.bashrc`) en bouwt. Open daarna een nieuwe
+terminal en voer `source install/setup.bash` uit.
 
-Pi, laptop y Create 3 deben compartir `ROS_DOMAIN_ID` y RMW. El Create 3 los fija en su interfaz web
-(Application > ROS 2); reinicia su aplicación tras cambiarlos. Comprueba también que los relojes de Pi y Create 3
-estén en hora (`date -u`); sin RTC/NTP la Pi arranca con la hora del último apagado.
+Pi, laptop en Create 3 moeten dezelfde `ROS_DOMAIN_ID` en RMW delen. De Create 3 stelt ze in via zijn webinterface
+(Application > ROS 2); herstart zijn applicatie na het wijzigen. Controleer ook dat de klokken van Pi en Create 3
+juist staan (`date -u`); zonder RTC/NTP start de Pi met de tijd van de laatste uitschakeling.
 
-## 2. Preparar la laptop (si vas a ver RViz desde ella)
+## 2. De laptop voorbereiden (als je RViz daarop wilt bekijken)
 
-Necesita este repo y `ros-jazzy-rviz2` (no hace falta compilar). Exporta los mismos valores que la Pi:
+Heeft deze repo en `ros-jazzy-rviz2` nodig (bouwen is niet nodig). Exporteer dezelfde waarden als op de Pi:
 
 ```bash
-export ROS_DOMAIN_ID=..  RMW_IMPLEMENTATION=..     # o pásalos con --domain / --rmw al script
-ros2 topic list                                     # con el robot en marcha debes ver /r2/scan
+export ROS_DOMAIN_ID=..  RMW_IMPLEMENTATION=..     # of geef ze mee met --domain / --rmw aan het script
+ros2 topic list                                     # met de robot aan moet je /r2/scan zien
 ```
 
-## 3. Antes de mapear: arrancar desde el dock
+## 3. Voor het kaarten: starten vanuit het dock
 
-El frame `map` nace en la pose del robot al arrancar el mapeo; si cada vez empieza en un sitio distinto, el modelo de
-RViz no coincide con el real. Para tener una referencia repetible (y la que exige ampliar un mapa, que usa
-`map_start_at_dock`):
+Het frame `map` ontstaat op de pose van de robot bij het starten van het kaarten; als hij elke keer ergens anders begint,
+komt het RViz-model niet overeen met het echte. Voor een herhaalbare referentie (en degene die nodig is om een kaart uit te
+breiden, die `map_start_at_dock` gebruikt):
 
-1. Pon el robot **en el dock** y no lo muevas hasta que RViz muestre el mapa.
-2. Opcional, si el Create 3 lleva tiempo encendido y su odometría ya se movió, ponla a cero **antes** de lanzar el
-   mapeo (no con slam_toolbox corriendo):
+1. Zet de robot **in het dock** en beweeg hem niet totdat RViz de kaart toont.
+2. Optioneel, als de Create 3 al lang aan staat en zijn odometrie al bewogen is, zet die op nul **voordat** je het
+   kaarten start (niet terwijl slam_toolbox draait):
    ```bash
    ros2 service call /r2/reset_pose irobot_create_msgs/srv/ResetPose "{pose: {position: {x: 0.0, y: 0.0, z: 0.0}, orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}}"
    ```
-   Necesita `ros-jazzy-irobot-create-msgs` en la máquina que lo llama (`sudo apt update && sudo apt install
-   ros-jazzy-irobot-create-msgs`); sin él da «The passed service type is invalid». Probado: el Create 3 responde sin error.
-3. Con el robot en el dock, el modelo de RViz debe apuntar igual que el real. Si no, queda un desfase fijo: es el yaw
-   de `laser_joint` en `hrobot_ld19.urdf.xacro` (o `laser_scan_dir` del driver), no un problema del dock.
+   Vereist `ros-jazzy-irobot-create-msgs` op de machine die het aanroept (`sudo apt update && sudo apt install
+   ros-jazzy-irobot-create-msgs`); zonder dat geeft het «The passed service type is invalid». Getest: de Create 3 antwoordt zonder fout.
+3. Met de robot in het dock moet het RViz-model dezelfde kant op wijzen als de echte. Zo niet, dan blijft er een vaste
+   afwijking: die is de yaw van `laser_joint` in `hrobot_rplidar_c1.urdf.xacro` (`laser_yaw`) of `laser_inverted` van de driver, geen probleem van het dock.
 
-## 4. Mapear
+## 4. Kaarten
 
 ```bash
-# Pi, terminal 1 (rviz:=false si lo vas a ver desde la laptop)
-ros2 launch hrobot_bringup mapping.launch.py lidar_port:=/dev/ldlidar rviz:=false
-# Pi, terminal 2: mover el robot
+# Pi, terminal 1 (rviz:=false als je het vanaf de laptop bekijkt)
+ros2 launch hrobot_bringup mapping.launch.py lidar_port:=/dev/rplidar rviz:=false
+# Pi, terminal 2: de robot bewegen
 ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r cmd_vel:=/r2/cmd_vel
-# Laptop: ver el mapeo (o abre RViz en la Pi con rviz:=true, el valor por defecto)
+# Laptop: het kaarten bekijken (of open RViz op de Pi met rviz:=true, de standaardwaarde)
 src/scripts/rviz_remote.sh [mapping|navigation] [--namespace NS] [--domain ID] [--rmw NAME]
 ```
 
-`rviz_remote.sh` sustituye `/<robot_namespace>` en el `.rviz` y remapea `/tf` y `/tf_static`; no fija nada de forma
-permanente.
+`rviz_remote.sh` vervangt `/<robot_namespace>` in de `.rviz` en remapt `/tf` en `/tf_static`; het stelt niets
+permanent in.
 
-Argumentos de `mapping.launch.py`: `robot_namespace:=r2  use_sim_time:=false  rviz:=true|false  maps_dir:=~/.create3_maps
-map:=<nombre>  slam_lifecycle:=true|false  lidar_port:=/dev/ttyUSB0  lidar_baudrate:=230400  laser_scan_dir:=true|false`
-(`laser_scan_dir:=false` si el scan gira al revés que el robot). Para otro robot,
-`robot_namespace:=r3`; sin namespace, `robot_namespace:=''`.
+Argumenten van `mapping.launch.py`: `robot_namespace:=r2  use_sim_time:=false  rviz:=true|false  maps_dir:=~/.create3_maps
+map:=<naam>  slam_lifecycle:=true|false  lidar_port:=/dev/ttyUSB0  lidar_baudrate:=460800  laser_inverted:=true|false
+lidar_scan_mode:=Standard`
+(`laser_inverted:=true` als de scan tegengesteld aan de robot draait). Voor een andere robot:
+`robot_namespace:=r3`; zonder namespace: `robot_namespace:=''`.
 
-## 5. Guardar el mapa
+## 5. De kaart opslaan
 
-Con el mapeo aún corriendo (Pi, terminal 3):
+Terwijl het kaarten nog draait (Pi, terminal 3):
 
 ```bash
-src/scripts/save_map.sh nombre_del_mapa [--maps-dir DIR] [--namespace NS] [--force] [--pull usuario@host] [--remote-ws DIR]
+src/scripts/save_map.sh naam_van_de_kaart [--maps-dir DIR] [--namespace NS] [--force] [--pull gebruiker@host] [--remote-ws DIR]
 ```
 
-Genera `src/maps/<nombre>.{posegraph,data,yaml,pgm}` llamando a los servicios `serialize_map` y `save_map` de
-slam_toolbox; muestra la respuesta de cada servicio, no sobrescribe sin `--force` y comprueba que existan los cuatro
-archivos.
+Genereert `src/maps/<naam>.{posegraph,data,yaml,pgm}` door de services `serialize_map` en `save_map` van
+slam_toolbox aan te roepen; toont het antwoord van elke service, overschrijft niets zonder `--force` en controleert dat alle vier de
+bestanden bestaan.
 
-slam_toolbox escribe los archivos en la máquina donde corre. Dos formas de usarlo:
+slam_toolbox schrijft de bestanden op de machine waar hij draait. Twee manieren om het te gebruiken:
 
-- **En la Pi** (donde corre slam_toolbox): `src/scripts/save_map.sh sala1`. Después copia los archivos a tu portátil
-  con `scp`.
-- **Desde el portátil**: `src/scripts/save_map.sh sala1 --pull robot2@<IP_PI>` guarda en `<remote-ws>/src/maps` de la Pi
-  (`--remote-ws`, por defecto `~/Hrobot`) y copia los cuatro archivos a `src/maps` del portátil. Necesita `ssh` a la Pi.
-  Sin `--pull`, el script avisa de que no hay slam_toolbox local y, si faltan los archivos, explica que se guardaron en
-  la otra máquina.
+- **Op de Pi** (waar slam_toolbox draait): `src/scripts/save_map.sh sala1`. Kopieer de bestanden daarna met
+  `scp` naar je laptop.
+- **Vanaf de laptop**: `src/scripts/save_map.sh sala1 --pull robot2@<IP_PI>` slaat op in `<remote-ws>/src/maps` van de Pi
+  (`--remote-ws`, standaard `~/Hrobot`) en kopieert de vier bestanden naar `src/maps` van de laptop. Vereist `ssh` naar de Pi.
+  Zonder `--pull` waarschuwt het script dat er geen lokale slam_toolbox is en, als de bestanden ontbreken, legt het uit dat ze op
+  de andere machine zijn opgeslagen.
 
 <details>
-<summary>Equivalente manual</summary>
+<summary>Handmatig equivalent</summary>
 
 ```bash
-WS=$PWD   # los mapas quedan en <workspace>/src/maps
+WS=$PWD   # de kaarten komen in <workspace>/src/maps
 ros2 service call /r2/slam_toolbox/serialize_map slam_toolbox/srv/SerializePoseGraph "{filename: '$WS/src/maps/sala1'}"
 ros2 service call /r2/slam_toolbox/save_map slam_toolbox/srv/SaveMap "{name: {data: '$WS/src/maps/sala1'}}"
 ```
 
-Los nombres de los campos están escritos de memoria: verifícalos con `ros2 interface show`.
+De namen van de velden zijn uit het hoofd geschreven: controleer ze met `ros2 interface show`.
 </details>
 
-## 6. Ampliar un mapa guardado (opcional)
+## 6. Een opgeslagen kaart uitbreiden (optioneel)
 
-Para el mapeo, pon el robot en el dock/origen del mapa y relanza el mapeo con el mapa cargado:
+Zet voor het kaarten de robot in het dock/de oorsprong van de kaart en start het kaarten opnieuw met de kaart geladen:
 
 ```bash
 ros2 launch hrobot_bringup mapping.launch.py map:=sala1 maps_dir:=$PWD/src/maps
 ```
 
-slam_toolbox carga `<maps_dir>/<nombre>.posegraph` (`map_start_at_dock: true`, modo mapping). Si el pose graph no existe
-el launch aborta con un `RuntimeError` (no arranca un mapa nuevo en silencio). Las rutas deben ser absolutas (sin `~`).
-Después vuelve al paso 5 para guardar.
+slam_toolbox laadt `<maps_dir>/<naam>.posegraph` (`map_start_at_dock: true`, mapping-modus). Bestaat de pose graph niet,
+dan stopt de launch met een `RuntimeError` (er start niet stilzwijgend een nieuwe kaart). Paden moeten absoluut zijn (zonder `~`).
+Ga daarna terug naar stap 5 om op te slaan.
 
-## 7. Navegar sobre el mapa guardado
+## 7. Navigeren op de opgeslagen kaart
 
-Para el mapeo antes (Ctrl+C): mapping y navigation a la vez publican `map -> odom`.
+Stop eerst het kaarten (Ctrl+C): mapping en navigation tegelijk publiceren `map -> odom`.
 
 ```bash
-ros2 launch hrobot_bringup navigation.launch.py map_yaml:=$PWD/src/maps/sala1.yaml lidar_port:=/dev/ldlidar
+ros2 launch hrobot_bringup navigation.launch.py map_yaml:=$PWD/src/maps/sala1.yaml lidar_port:=/dev/rplidar
 ```
 
-- **Pose inicial (como en la simulación):** por defecto AMCL arranca ya en `initial_x/y/yaw` = `0 0 0`, el origen del
-  mapa, o sea el dock desde el que se mapeó. Pon el robot en el dock antes de lanzar y manda metas directamente con
-  "2D Goal Pose" (topic `goal_pose`). Si el robot está en otro sitio, pasa `initial_x:=.. initial_y:=.. initial_yaw:=..`
-  (en el frame del mapa) o `set_initial_pose:=false` y fíjala con "2D Pose Estimate" en RViz. Arrancar con la pose ya
-  puesta también evita que Nav2 se quede a medio activar esperando `map -> base_link`.
-- Nav2 publica velocidades en `cmd_vel` (`/r2/cmd_vel`).
-- `nav.launch.py`: `map_server` + `amcl` (publica `map -> odom`) + Nav2 (controller RPP, planner Navfn, smoother,
-  behaviors, bt_navigator) + RViz. Config en `config/nav2_params.yaml`. `navigation.launch.py` añade `hardware_base` y
-  activa el relé de odom.
-- `odom_relay.py`: el Create 3 publica `/r2/odom` BEST_EFFORT y Nav2 suscribe RELIABLE (no empareja); el relé publica
-  `odom_reliable`, que leen `controller_server` y `bt_navigator`. Comprueba con
+- **Beginpose (zoals in de simulatie):** standaard start AMCL al op `initial_x/y/yaw` = `0 0 0`, de oorsprong van de
+  kaart, dus het dock waarvandaan gekaart is. Zet de robot voor het starten in het dock en stuur doelen direct met
+  "2D Goal Pose" (topic `goal_pose`). Staat de robot ergens anders, geef dan `initial_x:=.. initial_y:=.. initial_yaw:=..` mee
+  (in het kaartframe) of `set_initial_pose:=false` en stel hem in met "2D Pose Estimate" in RViz. Starten met de pose al
+  ingesteld voorkomt ook dat Nav2 half geactiveerd blijft wachten op `map -> base_link`.
+- Nav2 publiceert snelheden op `cmd_vel` (`/r2/cmd_vel`).
+- `nav.launch.py`: `map_server` + `amcl` (publiceert `map -> odom`) + Nav2 (controller RPP, planner Navfn, smoother,
+  behaviors, bt_navigator) + RViz. Configuratie in `config/nav2_params.yaml`. `navigation.launch.py` voegt `hardware_base` toe en
+  activeert de odom-relay.
+- `odom_relay.py`: de Create 3 publiceert `/r2/odom` als BEST_EFFORT en Nav2 abonneert zich als RELIABLE (koppelt niet); de relay publiceert
+  `odom_reliable`, dat `controller_server` en `bt_navigator` lezen. Controleer met
   `ros2 topic info /r2/odom_reliable -v`.
 
-## 8. Mapear y navegar a la vez (opcional)
+## 8. Tegelijk kaarten en navigeren (optioneel)
 
 ```bash
-ros2 launch hrobot_bringup mapping_navigation.launch.py lidar_port:=/dev/ldlidar
-# otra terminal: teleop, o "2D Goal Pose" en RViz
-src/scripts/save_map.sh nombre_del_mapa        # el mapa se guarda igual que en el paso 5
+ros2 launch hrobot_bringup mapping_navigation.launch.py lidar_port:=/dev/rplidar
+# andere terminal: teleop, of "2D Goal Pose" in RViz
+src/scripts/save_map.sh naam_van_de_kaart        # de kaart wordt net zo opgeslagen als in stap 5
 ```
 
-slam_toolbox (modo mapping) publica `map -> odom` y el `/map` vivo; Nav2 planifica sobre él (`nav.launch.py` con
-`localization:=slam`: sin `map_server` ni AMCL y con `allow_unknown: true` en el planner). No hay pose inicial que
-fijar: el mapa nace en la pose de arranque. Usa un solo RViz (`navigation.rviz`); `map:=<nombre>` amplía un mapa
-guardado como en el paso 6. **No lo combines con `mapping` ni con `navigation`** (los tres publican `map -> odom`).
+slam_toolbox (mapping-modus) publiceert `map -> odom` en de levende `/map`; Nav2 plant erop (`nav.launch.py` met
+`localization:=slam`: zonder `map_server` of AMCL en met `allow_unknown: true` in de planner). Er is geen beginpose om
+in te stellen: de kaart ontstaat op de startpose. Gebruik één enkele RViz (`navigation.rviz`); `map:=<naam>` breidt een opgeslagen
+kaart uit zoals in stap 6. **Combineer het niet met `mapping` of `navigation`** (alle drie publiceren `map -> odom`).
 
-Ten en cuenta: el mapa cambia bajo el robot si slam_toolbox corrige la pose; es más probable que fallen planes por
-pasos estrechos o zonas sin explorar; y slam_toolbox + Nav2 juntos cargan la Pi 5 (vigila `top`; si satura, sube
-`throttle_scan` o `map_update_interval` en `config/slam_params.yaml`). En simulación:
+Houd er rekening mee: de kaart verandert onder de robot als slam_toolbox de pose corrigeert; plannen mislukken eerder door smalle
+doorgangen of onverkende zones; en slam_toolbox + Nav2 samen belasten de Pi 5 (houd `top` in de gaten; als hij verzadigt, verhoog
+`throttle_scan` of `map_update_interval` in `config/slam_params.yaml`). In simulatie:
 `ros2 launch hrobot_simulation sim.launch.py nav:=true localization:=slam`.
 
-## Referencia
+## Referentie
 
-### Namespace del robot
+### Namespace van de robot
 
-`robot_namespace` vale por defecto `$CREATE3_ROBOT_NAMESPACE` si existe y, si no, `r2`; vacío = sin namespace.
-Se aplica **una sola vez**: cada launch hace `PushRosNamespace` solo de los nodos que crea y `mapping` no envuelve los
-`include` (nunca `/r2/r2/...`).
+`robot_namespace` is standaard `$CREATE3_ROBOT_NAMESPACE` als die bestaat en anders `r2`; leeg = geen namespace.
+Hij wordt **één keer** toegepast: elke launch doet `PushRosNamespace` alleen voor de nodes die hij aanmaakt en `mapping` wikkelt de
+`include`s niet (nooit `/r2/r2/...`).
 
-- **TF**: remapeo `/tf -> tf`, `/tf_static -> tf_static` (el Create 3 publica `/r2/tf`). Los `frame_id` no llevan prefijo.
-- **YAML**: con namespace se reescribe con `RewrittenYaml(root_key=<ns>)`; sin namespace se usa tal cual.
-- **slam_toolbox** publica `/map` absoluto: se remapea a `/<ns>/map`.
-- **RViz**: `mapping.rviz` usa `/<robot_namespace>/...`, sustituido con `ReplaceString`.
+- **TF**: remap `/tf -> tf`, `/tf_static -> tf_static` (de Create 3 publiceert `/r2/tf`). De `frame_id`'s hebben geen prefix.
+- **YAML**: met namespace wordt hij herschreven met `RewrittenYaml(root_key=<ns>)`; zonder namespace wordt hij ongewijzigd gebruikt.
+- **slam_toolbox** publiceert een absolute `/map`: die wordt geremapt naar `/<ns>/map`.
+- **RViz**: `mapping.rviz` gebruikt `/<robot_namespace>/...`, vervangen met `ReplaceString`.
 
-| Nombre | `r2` | vacío |
+| Naam | `r2` | leeg |
 |---|---|---|
-| LiDAR / mapa | `/r2/scan`, `/r2/map` | `/scan`, `/map` |
+| LiDAR / kaart | `/r2/scan`, `/r2/map` | `/scan`, `/map` |
 | Create 3 | `/r2/odom`, `/r2/cmd_vel`, `/r2/tf`, `/r2/tf_static` | `/odom`, `/cmd_vel`, `/tf`, `/tf_static` |
-| slam_toolbox | `/r2/slam_toolbox/serialize_map`, `/r2/slam_toolbox/save_map` | sin prefijo |
+| slam_toolbox | `/r2/slam_toolbox/serialize_map`, `/r2/slam_toolbox/save_map` | zonder prefix |
 
-### Parámetros
+### Parameters
 
-`config/slam_params.yaml`: slam_toolbox online_async, `max_laser_range: 12.0` (límite del LD19).
+`config/slam_params.yaml`: slam_toolbox online_async, `max_laser_range: 12.0` (limiet van de RPLIDAR C1).
 
-### Supuestos y pendientes de hardware (nada verificado contra ROS 2 real)
+### Aannames en hardware-openstaande punten (niets geverifieerd tegen echt ROS 2)
 
-- **Driver LD19**: `ldlidar_stl_ros2` (ejecutable `ldlidar_stl_ros2_node`, `product_name: LDLiDAR_LD19`). Si usas otro,
-  edita `hardware_base.launch.py` y `package.xml`. Puerto por defecto `/dev/ttyUSB0`, 230400 baudios; `laser_scan_dir`
-  puede requerir invertirse.
-- **`scan_resampler.py`**: el LD19 da 500-504 rayos por vuelta y slam_toolbox avisa `LaserRangeScan contains N range
-  readings, expected 504`. El driver publica `scan_raw` y el nodo republica `scan` con 504 rayos fijos (0..2π, vecino
-  más cercano; parámetro `num_beams`). Comprueba que el aviso desaparezca y que `ros2 topic hz /r2/scan` siga en ~10 Hz.
-- QoS de `/r2/scan_raw` del driver (best effort vs reliable) debe ser compatible con el suscriptor del resampler
+- **Driver RPLIDAR C1**: `sllidar_ros2` van Slamtec (executable `sllidar_node`; parameters `channel_type: serial`,
+  `serial_port`, `serial_baudrate: 460800`, `frame_id`, `inverted`, `angle_compensate: true`, `scan_mode`). De driver publiceert
+  op `scan`; `hardware_base.launch.py` remapt dat naar `scan_raw`. Gebruik je een andere driver, pas dan
+  `hardware_base.launch.py` en `package.xml` aan. Standaardpoort `/dev/ttyUSB0`, 460800 baud; `laser_inverted` kan
+  omgedraaid moeten worden. Controleer met `ros2 param list /r2/sllidar_node` of de parameternamen in jouw versie van de driver kloppen.
+- **Oriëntatie**: `laser_yaw` staat standaard op 0 in de xacro (de 0°-straal wijst naar voren). Dit is niet gemeten voor de
+  RPLIDAR C1: controleer het in RViz met de robot in het dock en pas `laser_yaw` aan.
+- **`scan_resampler.py`**: slam_toolbox meldt `LaserRangeScan contains N range readings, expected M` als het aantal stralen per
+  omwenteling varieert. De driver publiceert `scan_raw` en de node publiceert `scan` opnieuw met 360 vaste stralen (0..2π,
+  dichtstbijzijnde buur; parameter `num_beams`). Met `angle_compensate: true` levert de driver mogelijk al een vast aantal
+  stralen; dan is de resampler overbodig maar onschadelijk. Controleer dat de waarschuwing verdwijnt en dat `ros2 topic hz /r2/scan` op ~10 Hz blijft.
+- QoS van `/r2/scan_raw` van de driver (best effort vs reliable) moet compatibel zijn met de abonnee van de resampler
   (`ros2 topic info /r2/scan_raw -v`).
-- **Create 3**: se conecta por red (ver paso 1) y publica `odom -> base_link` en `/r2/tf`.
-- **TF**: `laser_frame` cuelga de `base_link` con `laser_z: 0.12` m (medir el real). `map -> odom` lo da slam_toolbox.
-- **slam_toolbox lifecycle**: en Jazzy `async_slam_toolbox_node` es lifecycle; si no lo es, `slam_lifecycle:=false`.
+- **Create 3**: verbindt via het netwerk (zie stap 1) en publiceert `odom -> base_link` op `/r2/tf`.
+- **TF**: `laser_frame` hangt aan `base_link` met `laser_z: 0.12` m (meet de echte waarde). `map -> odom` komt van slam_toolbox.
+- **slam_toolbox lifecycle**: in Jazzy is `async_slam_toolbox_node` een lifecycle-node; zo niet, `slam_lifecycle:=false`.

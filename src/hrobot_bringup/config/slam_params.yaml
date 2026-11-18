@@ -1,10 +1,10 @@
-# slam_toolbox online_async (mapping) for Create 3 + LDROBOT LD19.
-# Node name is `slam_toolbox` (launched as async_slam_toolbox_node, name='slam_toolbox').
+# slam_toolbox online_async (mapping) voor Create 3 + SLAMTEC RPLIDAR C1.
+# De node heet `slam_toolbox` (gestart als async_slam_toolbox_node, name='slam_toolbox').
 #
-# map_file_name / map_start_at_dock are intentionally NOT set here: slam.launch.py adds
-#   map_file_name: <maps_dir>/<map>   (base path WITHOUT extension; loads <map>.posegraph + .data)
+# map_file_name / map_start_at_dock worden hier bewust NIET ingesteld: slam.launch.py voegt
+#   map_file_name: <maps_dir>/<map>   (basispad ZONDER extensie; laadt <map>.posegraph + .data)
 #   map_start_at_dock: true
-# only when launched with map:=<name>, to extend an existing map. Without map:= a new map is started.
+# alleen toe bij map:=<naam>, om een bestaande kaart uit te breiden. Zonder map:= start een nieuwe kaart.
 slam_toolbox:
   ros__parameters:
     # Solver (Ceres)
@@ -19,29 +19,30 @@ slam_toolbox:
     odom_frame: odom
     map_frame: map
     base_frame: base_link
-    scan_topic: scan          # relative: /<ns>/scan
-    mode: mapping            # mapping (not localization): the robot keeps extending the map
+    scan_topic: scan          # relatief: /<ns>/scan
+    mode: mapping            # mapping (geen localization): de robot blijft de kaart uitbreiden
 
     debug_logging: false
-    throttle_scan: 1         # LD19 gives ~10 Hz; process every scan (raise if the RPi5 CPU saturates)
+    throttle_scan: 1         # RPLIDAR C1 levert ~10 Hz; verwerk elke scan (verhoog als de RPi5-CPU verzadigt)
     transform_publish_period: 0.02
     map_update_interval: 2.0
     resolution: 0.05
-    # LD19 datasheet: 0.02-12 m range. max_laser_range is set to the sensor limit; slam_toolbox ranges
-    # above it are truncated for the grid, so a value above the real range would only add noise.
+    # Datasheet RPLIDAR C1: bereik 0,05-12 m (wit object, 90% reflectie). max_laser_range staat op de
+    # sensorlimiet; metingen daarboven worden voor het raster afgekapt, dus een hogere waarde dan het
+    # echte bereik voegt alleen ruis toe.
     max_laser_range: 12.0
-    # Ignore returns from the robot body / LD19 housing (the lidar sits above the base).
+    # Negeer metingen van de robotromp / RPLIDAR C1-behuizing (de lidar zit boven de basis).
     min_laser_range: 0.10
     minimum_time_interval: 0.5
     transform_timeout: 0.2
     tf_buffer_duration: 30.0
-    stack_size_to_use: 40000000   # bytes; needed to serialize/deserialize large pose graphs
+    stack_size_to_use: 40000000   # bytes; nodig om grote pose graphs te (de)serialiseren
     enable_interactive_mode: false
 
-    # General parameters
+    # Algemene parameters
     use_scan_matching: true
     use_scan_barycenter: true
-    minimum_travel_distance: 0.2    # m between processed scans (small for a 0.17 m radius robot)
+    minimum_travel_distance: 0.2    # m tussen verwerkte scans (klein voor een robot met 0,17 m straal)
     minimum_travel_heading: 0.2     # rad (~11 deg)
     scan_buffer_size: 10
     scan_buffer_maximum_scan_distance: 10.0
@@ -54,17 +55,17 @@ slam_toolbox:
     loop_match_minimum_response_coarse: 0.35
     loop_match_minimum_response_fine: 0.45
 
-    # Correlation parameters
+    # Correlatieparameters
     correlation_search_space_dimension: 0.5
     correlation_search_space_resolution: 0.01
     correlation_search_space_smear_deviation: 0.1
 
-    # Loop closure correlation parameters
+    # Correlatieparameters voor loop closure
     loop_search_space_dimension: 8.0
     loop_search_space_resolution: 0.05
     loop_search_space_smear_deviation: 0.03
 
-    # Scan matcher parameters
+    # Parameters van de scan matcher
     distance_variance_penalty: 0.5
     angle_variance_penalty: 1.0
     fine_search_angle_offset: 0.00349

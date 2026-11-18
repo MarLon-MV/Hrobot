@@ -1,19 +1,20 @@
-"""Navegación autónoma con Nav2 + RViz. Sin hardware.
+"""Autonome navigatie met Nav2 + RViz. Zonder hardware.
 
-Lo comparten `navigation`, `mapping_navigation` (robot real) y `sim` (con nav:=true).
+Gedeeld door `navigation`, `mapping_navigation` (echte robot) en `sim` (met nav:=true).
 
-`localization` elige quién publica `map -> odom` y `/map`:
-  * amcl (por defecto): map_server + AMCL sobre un mapa guardado (`map_yaml` obligatorio). No corre slam_toolbox.
-  * slam: no lanza map_server ni AMCL; Nav2 usa el `/map` vivo de un slam_toolbox que corre aparte (lo lanza
-    `mapping_navigation`). El planner pasa a `allow_unknown: true` porque el mapa aún tiene zonas sin explorar.
+`localization` bepaalt wie `map -> odom` en `/map` publiceert:
+  * amcl (standaard): map_server + AMCL op een opgeslagen kaart (`map_yaml` verplicht). slam_toolbox draait niet.
+  * slam: start geen map_server of AMCL; Nav2 gebruikt de levende `/map` van een apart draaiende slam_toolbox
+    (gestart door `mapping_navigation`). De planner schakelt naar `allow_unknown: true` omdat de kaart nog
+    onverkende gebieden heeft.
 
-Arguments: robot_namespace (env CREATE3_ROBOT_NAMESPACE or 'r2'; empty = none), use_sim_time (false),
-localization (amcl|slam), map_yaml (ruta absoluta al .yaml del mapa; solo con localization:=amcl), rviz (true),
-params_file, autostart (true), odom_relay (false; true en el robot real: Nav2 lee odom_reliable),
-set_initial_pose (false), initial_x/initial_y/initial_yaw (0.0) (estos tres solo con AMCL).
+Argumenten: robot_namespace (env CREATE3_ROBOT_NAMESPACE of 'r2'; leeg = geen), use_sim_time (false),
+localization (amcl|slam), map_yaml (absoluut pad naar het .yaml van de kaart; alleen met localization:=amcl),
+rviz (true), params_file, autostart (true), odom_relay (false; true op de echte robot: Nav2 leest odom_reliable),
+set_initial_pose (false), initial_x/initial_y/initial_yaw (0.0) (deze drie alleen met AMCL).
 
-Namespace: igual que slam.launch.py (PushRosNamespace, TF relativo, RewrittenYaml). Los nodos Nav2 se
-lanzan con el mismo patrón que el stack anterior probado en la Pi.
+Namespace: gelijk aan slam.launch.py (PushRosNamespace, relatieve TF, RewrittenYaml). De Nav2-nodes worden
+gestart met hetzelfde patroon als de eerdere, op de Pi geteste stack.
 """
 
 import os
@@ -48,7 +49,7 @@ def _setup(context, *args, **kwargs):
 
     localization = LaunchConfiguration("localization").perform(context).strip().lower()
     if localization not in ("amcl", "slam"):
-        raise RuntimeError(f"localization:='{localization}' no es válido: usa 'amcl' o 'slam'.")
+        raise RuntimeError(f"localization:='{localization}' is ongeldig: gebruik 'amcl' of 'slam'.")
     use_amcl = localization == "amcl"
 
     map_yaml = ""
@@ -57,12 +58,12 @@ def _setup(context, *args, **kwargs):
         map_yaml = os.path.abspath(os.path.expanduser(map_yaml_arg)) if map_yaml_arg else ""
         if not os.path.isfile(map_yaml):
             raise RuntimeError(
-                f"map_yaml:='{map_yaml_arg}' no existe o está vacío. Con localization:=amcl pasa la ruta "
-                "absoluta al .yaml del mapa (p. ej. map_yaml:=$PWD/src/maps/mapa1.yaml; se genera con "
-                "save_map, ver README)."
+                f"map_yaml:='{map_yaml_arg}' bestaat niet of is leeg. Geef met localization:=amcl het absolute "
+                "pad naar het .yaml van de kaart mee (bijv. map_yaml:=$PWD/src/maps/mapa1.yaml; wordt gemaakt met "
+                "save_map, zie README)."
             )
 
-    # Orden: '/<robot_namespace>' -> '/<ns>' en los topics de los costmaps y luego RewrittenYaml.
+    # Volgorde: '/<robot_namespace>' -> '/<ns>' in de costmap-topics en daarna RewrittenYaml.
     params_file = rewrite_yaml(
         substitute_namespace_markers(LaunchConfiguration("params_file"), namespace), namespace
     )
@@ -105,7 +106,7 @@ def _setup(context, *args, **kwargs):
                 parameters=common + [{"autostart": autostart}],
             ),
         ]
-    # Con slam_toolbox el mapa crece mientras se navega: hay que poder planificar por zonas aún desconocidas.
+    # Met slam_toolbox groeit de kaart tijdens het navigeren: plannen door nog onbekende gebieden moet kunnen.
     planner_extra = None if use_amcl else {"GridBased": {"allow_unknown": True}}
     actions += [
         nav2_node("nav2_controller", "controller_server", extra=odom_override),
@@ -162,13 +163,13 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "localization",
                 default_value="amcl",
-                description="amcl = map_server + AMCL sobre un mapa guardado; slam = usar el /map de "
-                "un slam_toolbox que corre aparte (mapear y navegar a la vez).",
+                description="amcl = map_server + AMCL op een opgeslagen kaart; slam = gebruik de /map van "
+                "een apart draaiende slam_toolbox (tegelijk kaarten en navigeren).",
             ),
             DeclareLaunchArgument(
                 "map_yaml",
                 default_value="",
-                description="Ruta absoluta al .yaml del mapa (map_server). Obligatorio con localization:=amcl.",
+                description="Absoluut pad naar het .yaml van de kaart (map_server). Verplicht met localization:=amcl.",
             ),
             DeclareLaunchArgument("rviz", default_value="true", description="true|false"),
             DeclareLaunchArgument("params_file", default_value=default_params),
@@ -176,12 +177,12 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "odom_relay",
                 default_value="false",
-                description="true = relé BEST_EFFORT->RELIABLE de odom (robot real).",
+                description="true = BEST_EFFORT->RELIABLE-relay van odom (echte robot).",
             ),
             DeclareLaunchArgument(
                 "set_initial_pose",
                 default_value="false",
-                description="true = AMCL arranca en initial_x/y/yaw; false = usar 2D Pose Estimate en RViz.",
+                description="true = AMCL start op initial_x/y/yaw; false = gebruik 2D Pose Estimate in RViz.",
             ),
             DeclareLaunchArgument("initial_x", default_value="0.0"),
             DeclareLaunchArgument("initial_y", default_value="0.0"),

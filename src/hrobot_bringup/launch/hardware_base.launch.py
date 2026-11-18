@@ -1,19 +1,19 @@
-"""Hardware base: robot_state_publisher (xacro) + LiDAR LD19 driver.
+"""Hardware-basis: robot_state_publisher (xacro) + driver van de SLAMTEC RPLIDAR C1.
 
-NOTE: the iRobot Create 3 is NOT launched here. It runs its own firmware and is reached over the
-network (Wi-Fi/Ethernet-over-USB) through its embedded micro-ROS/Fast DDS or Zenoh stack. The RPi5
-must share the Create 3 ROS_DOMAIN_ID and RMW (rmw_fastrtps_cpp or rmw_zenoh_cpp, as configured in
-the Create 3 web UI > Application > ROS 2). The Create 3 lives in a namespace (default /r2: it
-publishes /r2/odom, /r2/tf, /r2/tf_static and listens on /r2/cmd_vel); this launch puts the
-nodes it creates under the same `robot_namespace` and remaps TF to <ns>/tf and <ns>/tf_static
-(empty robot_namespace = no namespace). The namespace is applied here once (see
-hrobot_namespace.py); callers must not wrap this launch in another namespace. Pending hardware
-check.
+LET OP: de iRobot Create 3 wordt hier NIET gestart. Hij draait zijn eigen firmware en wordt via het
+netwerk (Wi-Fi/Ethernet-over-USB) bereikt via zijn ingebouwde micro-ROS/Fast DDS- of Zenoh-stack. De RPi5
+moet dezelfde ROS_DOMAIN_ID en RMW hebben als de Create 3 (rmw_fastrtps_cpp of rmw_zenoh_cpp, zoals
+ingesteld in de webinterface van de Create 3 > Application > ROS 2). De Create 3 leeft in een namespace
+(standaard /r2: hij publiceert /r2/odom, /r2/tf, /r2/tf_static en luistert op /r2/cmd_vel); deze launch plaatst
+de nodes die hij aanmaakt onder dezelfde `robot_namespace` en remapt TF naar <ns>/tf en <ns>/tf_static
+(lege robot_namespace = geen namespace). De namespace wordt hier één keer toegepast (zie
+hrobot_namespace.py); aanroepers mogen deze launch niet in een andere namespace wikkelen. Hardwarecontrole
+nog te doen.
 
-LD19 driver ASSUMPTION: LDRobot's official `ldlidar_stl_ros2` package (node executable
-`ldlidar_stl_ros2_node`). Chosen because it is the vendor driver for the LD19 and exposes
-frame_id / topic_name / port_name / port_baudrate parameters. It must be built from source in the
-workspace (not available through rosdep).
+AANNAME over de RPLIDAR C1-driver: het officiële pakket `sllidar_ros2` van Slamtec (executable
+`sllidar_node`). Gekozen omdat het de driver van de fabrikant is en de parameters channel_type /
+serial_port / serial_baudrate / frame_id / inverted / angle_compensate / scan_mode ondersteunt. Het moet
+vanaf de broncode in de workspace gebouwd worden (niet beschikbaar via rosdep).
 """
 
 import os
@@ -40,10 +40,11 @@ def _setup(context, *args, **kwargs):
     use_sim_time = LaunchConfiguration("use_sim_time")
     lidar_port = LaunchConfiguration("lidar_port")
     lidar_baudrate = LaunchConfiguration("lidar_baudrate")
-    laser_scan_dir = LaunchConfiguration("laser_scan_dir")
+    laser_inverted = LaunchConfiguration("laser_inverted")
+    lidar_scan_mode = LaunchConfiguration("lidar_scan_mode")
 
     xacro_file = os.path.join(
-        get_package_share_directory("hrobot_description"), "urdf", "hrobot_ld19.urdf.xacro"
+        get_package_share_directory("hrobot_description"), "urdf", "hrobot_rplidar_c1.urdf.xacro"
     )
     robot_description = ParameterValue(
         Command([FindExecutable(name="xacro"), " ", xacro_file]), value_type=str
@@ -58,28 +59,28 @@ def _setup(context, *args, **kwargs):
         remappings=tf_remappings(namespace),
     )
 
-    # Publishes sensor_msgs/LaserScan on `scan_raw` with frame laser_frame (defined in the xacro). The LD19
-    # returns 500-504 beams per turn, which slam_toolbox rejects, so scan_resampler republishes it as
-    # `scan` (/<ns>/scan; /scan without namespace) with a fixed beam count.
-    ldlidar = Node(
-        package="ldlidar_stl_ros2",
-        executable="ldlidar_stl_ros2_node",
-        name="ldlidar_publisher_ld19",
+    # Publiceert sensor_msgs/LaserScan op `scan_raw` met frame laser_frame (gedefinieerd in de xacro). De
+    # driver publiceert standaard op `scan`; die naam wordt hier naar `scan_raw` geremapt. slam_toolbox
+    # (Karto) weigert scans waarvan het aantal stralen verandert, dus scan_resampler publiceert het opnieuw
+    # als `scan` (/<ns>/scan; /scan zonder namespace) met een vast aantal stralen.
+    rplidar = Node(
+        package="sllidar_ros2",
+        executable="sllidar_node",
+        name="sllidar_node",
         output="screen",
         parameters=[
             {
-                "product_name": "LDLiDAR_LD19",
-                "topic_name": "scan_raw",
+                "channel_type": "serial",
+                "serial_port": lidar_port,
+                # LaunchConfiguration geeft een string: converteren zodat de node een geheel getal ontvangt.
+                "serial_baudrate": ParameterValue(lidar_baudrate, value_type=int),
                 "frame_id": "laser_frame",
-                "port_name": lidar_port,
-                # LaunchConfiguration yields a string: convert so the node receives an integer.
-                "port_baudrate": ParameterValue(lidar_baudrate, value_type=int),
-                "laser_scan_dir": ParameterValue(laser_scan_dir, value_type=bool),
-                "enable_angle_crop_func": False,
-                "angle_crop_min": 135.0,
-                "angle_crop_max": 225.0,
+                "inverted": ParameterValue(laser_inverted, value_type=bool),
+                "angle_compensate": True,
+                "scan_mode": lidar_scan_mode,
             }
         ],
+        remappings=[("scan", "scan_raw")],
     )
 
     scan_resampler = Node(
@@ -87,10 +88,10 @@ def _setup(context, *args, **kwargs):
         executable="scan_resampler.py",
         name="scan_resampler",
         output="screen",
-        parameters=[{"input_topic": "scan_raw", "output_topic": "scan", "num_beams": 504}],
+        parameters=[{"input_topic": "scan_raw", "output_topic": "scan", "num_beams": 360}],
     )
 
-    return namespaced(namespace, [robot_state_publisher, ldlidar, scan_resampler])
+    return namespaced(namespace, [robot_state_publisher, rplidar, scan_resampler])
 
 
 def generate_launch_description():
@@ -101,13 +102,18 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "lidar_port",
                 default_value="/dev/ttyUSB0",
-                description="Serial port of the LD19 (consider a udev symlink, e.g. /dev/ldlidar).",
+                description="Seriële poort van de RPLIDAR C1 (overweeg een udev-symlink, bijv. /dev/rplidar).",
             ),
-            DeclareLaunchArgument("lidar_baudrate", default_value="230400"),
+            DeclareLaunchArgument("lidar_baudrate", default_value="460800"),
             DeclareLaunchArgument(
-                "laser_scan_dir",
-                default_value="true",
-                description="LD19 scan direction (true|false). Flip it if the scan turns opposite to the robot.",
+                "laser_inverted",
+                default_value="false",
+                description="Scanrichting van de RPLIDAR C1 (true|false). Zet op true als de scan tegengesteld aan de robot draait.",
+            ),
+            DeclareLaunchArgument(
+                "lidar_scan_mode",
+                default_value="Standard",
+                description="Scanmodus van de RPLIDAR C1 (Standard of DenseBoost; leeg = standaardmodus van de driver).",
             ),
             OpaqueFunction(function=_setup),
         ]

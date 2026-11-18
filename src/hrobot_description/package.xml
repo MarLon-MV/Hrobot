@@ -3,7 +3,7 @@
 <package format="3">
   <name>hrobot_description</name>
   <version>0.1.0</version>
-  <description>URDF/xacro model (Create 3 base + LD19 LiDAR) and RViz configuration for the Create 3 teleoperated mapping robot.</description>
+  <description>URDF/xacro-model (Create 3-basis + RPLIDAR C1 LiDAR) en RViz-configuratie voor de teleoperated mapping-robot op basis van de Create 3.</description>
   <maintainer email="dev@example.com">hrobot</maintainer>
   <license>Apache-2.0</license>
 

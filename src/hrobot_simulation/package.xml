@@ -3,7 +3,7 @@
 <package format="3">
   <name>hrobot_simulation</name>
   <version>0.1.0</version>
-  <description>Gazebo (Harmonic) simulation of the Create 3 + LD19 robot: world, ros_gz bridge and launch.</description>
+  <description>Gazebo (Harmonic)-simulatie van de Create 3 + RPLIDAR C1-robot: wereld, ros_gz-brug en launch.</description>
   <maintainer email="dev@example.com">hrobot</maintainer>
   <license>Apache-2.0</license>
 

@@ -3,7 +3,7 @@
 <package format="3">
   <name>hrobot_bringup</name>
   <version>0.1.0</version>
-  <description>Launch files and parameter files (slam_toolbox, LD19, RViz) for the Create 3 teleoperated mapping robot.</description>
+  <description>Launch- en parameterbestanden (slam_toolbox, Nav2, RPLIDAR C1, RViz) voor de teleoperated mapping-robot op basis van de Create 3.</description>
   <maintainer email="dev@example.com">hrobot</maintainer>
   <license>Apache-2.0</license>
 
@@ -35,12 +35,12 @@
   <exec_depend>ament_index_python</exec_depend>
   <exec_depend>lifecycle_msgs</exec_depend>
   <!--
-    LiDAR LD19 driver. ASSUMPTION: LDRobot's official ROS 2 driver `ldlidar_stl_ros2`
-    (https://github.com/ldrobotSensorTeam/ldlidar_stl_ros2). It is NOT a rosdep key, so it must be
-    cloned into the workspace and built from source; rosdep will not resolve it. If a different
-    driver is used, change the Node in launch/hardware_base.launch.py and this dependency.
+    Driver voor de SLAMTEC RPLIDAR C1. AANNAME: het officiële ROS 2-pakket van Slamtec `sllidar_ros2`
+    (https://github.com/Slamtec/sllidar_ros2, node `sllidar_node`). Het is GEEN rosdep-sleutel: het moet in
+    de workspace gekloond en vanaf de broncode gebouwd worden; rosdep lost het niet op. Gebruik je een ander
+    driver, pas dan de Node in launch/hardware_base.launch.py en deze afhankelijkheid aan.
   -->
-  <exec_depend>ldlidar_stl_ros2</exec_depend>
+  <exec_depend>sllidar_ros2</exec_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

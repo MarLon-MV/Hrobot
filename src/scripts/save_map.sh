@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
-# Guarda el mapa que slam_toolbox está construyendo (mapping.launch.py debe estar corriendo).
+# Slaat de kaart op die slam_toolbox aan het bouwen is (mapping.launch.py moet draaien).
 #
-# Genera en <maps_dir> los dos formatos que usa el flujo mapear -> navegar:
-#   <nombre>.posegraph + <nombre>.data   para AMPLIAR el mapa:  mapping.launch.py map:=<nombre> maps_dir:=<maps_dir>
-#   <nombre>.yaml + <nombre>.pgm         para NAVEGAR:          navigation.launch.py map_yaml:=<maps_dir>/<nombre>.yaml
+# Genereert in <maps_dir> de twee formaten die de workflow kaarten -> navigeren gebruikt:
+#   <naam>.posegraph + <naam>.data   om de kaart UIT TE BREIDEN:  mapping.launch.py map:=<naam> maps_dir:=<maps_dir>
+#   <naam>.yaml + <naam>.pgm         om te NAVIGEREN:               navigation.launch.py map_yaml:=<maps_dir>/<naam>.yaml
 #
-# Uso:  src/scripts/save_map.sh <nombre> [--maps-dir DIR] [--namespace NS] [--force]
-#                                        [--pull USUARIO@HOST] [--remote-ws DIR]
-#   <nombre>       solo letras, dígitos, '_' y '-' (sin ruta ni extensión)
-#   --maps-dir     carpeta de salida en ESTA máquina (def: <raíz del workspace>/src/maps)
-#   --namespace    namespace del robot (def: $CREATE3_ROBOT_NAMESPACE si existe, si no r2; vacío = ninguno)
-#   --force        sobrescribe un mapa existente con ese nombre
-#   --pull         slam_toolbox corre en OTRA máquina (la Pi): los archivos se guardan allí, en
-#                  <remote-ws>/src/maps, y luego se copian con scp a --maps-dir. Necesita ssh a ese host.
-#   --remote-ws    workspace en la otra máquina (def: ~/Hrobot); solo con --pull
+# Gebruik:  src/scripts/save_map.sh <naam> [--maps-dir DIR] [--namespace NS] [--force]
+#                                          [--pull GEBRUIKER@HOST] [--remote-ws DIR]
+#   <naam>         alleen letters, cijfers, '_' en '-' (zonder pad of extensie)
+#   --maps-dir     uitvoermap op DEZE machine (standaard: <workspace-root>/src/maps)
+#   --namespace    namespace van de robot (standaard: $CREATE3_ROBOT_NAMESPACE indien gezet, anders r2; leeg = geen)
+#   --force        overschrijft een bestaande kaart met die naam
+#   --pull         slam_toolbox draait op een ANDERE machine (de Pi): de bestanden worden daar opgeslagen,
+#                  in <remote-ws>/src/maps, en daarna met scp naar --maps-dir gekopieerd. Vereist ssh naar die host.
+#   --remote-ws    workspace op de andere machine (standaard: ~/Hrobot); alleen met --pull
 #
-# slam_toolbox escribe los archivos en la máquina donde corre. Sin --pull, ejecuta este script en esa misma
-# máquina; los servicios responden por red desde otra, pero los archivos acabarían en el disco remoto.
+# slam_toolbox schrijft de bestanden op de machine waar hij draait. Voer dit script zonder --pull op diezelfde
+# machine uit; de services antwoorden via het netwerk vanaf een andere, maar de bestanden zouden op de externe schijf belanden.
 
 set -euo pipefail
 
@@ -35,103 +35,103 @@ die() { echo "ERROR: $*" >&2; exit 1; }
 while [ $# -gt 0 ]; do
   arg="$1"; shift
   case "$arg" in
-    --maps-dir) [ $# -gt 0 ] || die "--maps-dir necesita un valor"; MAPS_DIR="$1"; shift ;;
-    --namespace) [ $# -gt 0 ] || die "--namespace necesita un valor (usa '' para ninguno)"; NAMESPACE="$1"; shift ;;
-    --pull) [ $# -gt 0 ] || die "--pull necesita usuario@host"; PULL="$1"; shift ;;
-    --remote-ws) [ $# -gt 0 ] || die "--remote-ws necesita un valor"; REMOTE_WS="$1"; shift ;;
+    --maps-dir) [ $# -gt 0 ] || die "--maps-dir heeft een waarde nodig"; MAPS_DIR="$1"; shift ;;
+    --namespace) [ $# -gt 0 ] || die "--namespace heeft een waarde nodig (gebruik '' voor geen)"; NAMESPACE="$1"; shift ;;
+    --pull) [ $# -gt 0 ] || die "--pull heeft gebruiker@host nodig"; PULL="$1"; shift ;;
+    --remote-ws) [ $# -gt 0 ] || die "--remote-ws heeft een waarde nodig"; REMOTE_WS="$1"; shift ;;
     --force) FORCE=1 ;;
-    -h|--help) sed -n '2,22p' "${BASH_SOURCE[0]}"; exit 0 ;;
-    -*) die "opción desconocida: ${arg}" ;;
-    *) [ -z "${NAME}" ] || die "solo se admite un nombre de mapa"; NAME="${arg}" ;;
+    -h|--help) sed -n '2,19p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -*) die "onbekende optie: ${arg}" ;;
+    *) [ -z "${NAME}" ] || die "slechts één kaartnaam is toegestaan"; NAME="${arg}" ;;
   esac
 done
 
-[ -n "${NAME}" ] || die "falta el nombre del mapa. Uso: save_map.sh <nombre> [--maps-dir DIR] [--namespace NS] [--force] [--pull usuario@host]"
-[[ "${NAME}" =~ ^[A-Za-z0-9_-]+$ ]] || die "nombre inválido '${NAME}': usa solo letras, dígitos, '_' y '-'"
+[ -n "${NAME}" ] || die "kaartnaam ontbreekt. Gebruik: save_map.sh <naam> [--maps-dir DIR] [--namespace NS] [--force] [--pull gebruiker@host]"
+[[ "${NAME}" =~ ^[A-Za-z0-9_-]+$ ]] || die "ongeldige naam '${NAME}': gebruik alleen letters, cijfers, '_' en '-'"
 
 NAMESPACE="${NAMESPACE#/}"; NAMESPACE="${NAMESPACE%/}"
 PREFIX=""
 [ -z "${NAMESPACE}" ] || PREFIX="/${NAMESPACE}"
 
-command -v ros2 >/dev/null || die "ros2 no está en el PATH: haz source de /opt/ros/jazzy/setup.bash y del workspace"
+command -v ros2 >/dev/null || die "ros2 staat niet in het PATH: voer source uit op /opt/ros/jazzy/setup.bash en op de workspace"
 
 mkdir -p "${MAPS_DIR}"
-MAPS_DIR="$(cd "${MAPS_DIR}" && pwd)"   # ruta absoluta
+MAPS_DIR="$(cd "${MAPS_DIR}" && pwd)"   # absoluut pad
 LOCAL_BASE="${MAPS_DIR}/${NAME}"
 
 if [ "${FORCE}" -eq 0 ]; then
   for ext in "${EXTS[@]}"; do
-    [ ! -e "${LOCAL_BASE}.${ext}" ] || die "${LOCAL_BASE}.${ext} ya existe (usa --force para sobrescribir)"
+    [ ! -e "${LOCAL_BASE}.${ext}" ] || die "${LOCAL_BASE}.${ext} bestaat al (gebruik --force om te overschrijven)"
   done
 fi
 
-# BASE = ruta (sin extensión) que recibe slam_toolbox: debe existir en la máquina donde corre.
+# BASE = pad (zonder extensie) dat slam_toolbox ontvangt: moet bestaan op de machine waar hij draait.
 if [ -n "${PULL}" ]; then
-  command -v ssh >/dev/null && command -v scp >/dev/null || die "--pull necesita ssh y scp"
-  # slam_toolbox no expande '~': se resuelve a ruta absoluta en la otra máquina.
+  command -v ssh >/dev/null && command -v scp >/dev/null || die "--pull heeft ssh en scp nodig"
+  # slam_toolbox expandeert '~' niet: wordt op de andere machine naar een absoluut pad omgezet.
   REMOTE_WS_ABS="$(ssh "${PULL}" "cd ${REMOTE_WS} && pwd")" \
-    || die "no pude entrar en '${REMOTE_WS}' en ${PULL} (¿--remote-ws correcto? ¿ssh funciona?)"
+    || die "kan '${REMOTE_WS}' op ${PULL} niet openen (klopt --remote-ws? werkt ssh?)"
   REMOTE_MAPS="${REMOTE_WS_ABS}/src/maps"
-  ssh "${PULL}" "mkdir -p '${REMOTE_MAPS}'" || die "no pude crear ${REMOTE_MAPS} en ${PULL}"
+  ssh "${PULL}" "mkdir -p '${REMOTE_MAPS}'" || die "kan ${REMOTE_MAPS} op ${PULL} niet aanmaken"
   if [ "${FORCE}" -eq 0 ]; then
     for ext in "${EXTS[@]}"; do
       ssh "${PULL}" "[ ! -e '${REMOTE_MAPS}/${NAME}.${ext}' ]" \
-        || die "${PULL}:${REMOTE_MAPS}/${NAME}.${ext} ya existe (usa --force para sobrescribir)"
+        || die "${PULL}:${REMOTE_MAPS}/${NAME}.${ext} bestaat al (gebruik --force om te overschrijven)"
     done
   fi
   BASE="${REMOTE_MAPS}/${NAME}"
 else
   BASE="${LOCAL_BASE}"
   if ! pgrep -f async_slam_toolbox_node >/dev/null 2>&1; then
-    echo "AVISO: no hay un slam_toolbox corriendo en esta máquina. Si corre en la Pi, los archivos se" >&2
-    echo "       guardarían allí: usa --pull usuario@host (o ejecuta este script en la Pi)." >&2
+    echo "WAARSCHUWING: er draait geen slam_toolbox op deze machine. Draait hij op de Pi, dan worden de bestanden" >&2
+    echo "       daar opgeslagen: gebruik --pull gebruiker@host (of voer dit script op de Pi uit)." >&2
   fi
 fi
 
 SER="${PREFIX}/slam_toolbox/serialize_map"
 SAVE="${PREFIX}/slam_toolbox/save_map"
 timeout 10 ros2 service list 2>/dev/null | grep -qx "${SER}" \
-  || die "no existe el servicio ${SER}: ¿está corriendo mapping.launch.py y el namespace es '${NAMESPACE}'?"
+  || die "de service ${SER} bestaat niet: draait mapping.launch.py en is de namespace '${NAMESPACE}'?"
 
-# Llama a un servicio y muestra su respuesta (antes se descartaba y ocultaba el motivo del fallo).
+# Roept een service aan en toont het antwoord (voorheen werd het weggegooid en bleef de foutreden verborgen).
 call_service() {
   local service="$1" type="$2" request="$3" out
   out="$(timeout 60 ros2 service call "${service}" "${type}" "${request}" 2>&1)" \
-    || { echo "${out}" >&2; die "falló la llamada a ${service}"; }
+    || { echo "${out}" >&2; die "aanroep van ${service} mislukt"; }
   echo "${out}" | sed -n '/response/,$p' | sed 's/^/      /'
 }
 
-echo "[1/2] Guardando pose graph en ${BASE}.posegraph/.data ..."
+echo "[1/2] Pose graph opslaan in ${BASE}.posegraph/.data ..."
 call_service "${SER}" slam_toolbox/srv/SerializePoseGraph "{filename: '${BASE}'}"
 
-echo "[2/2] Guardando imagen en ${BASE}.yaml/.pgm ..."
+echo "[2/2] Afbeelding opslaan in ${BASE}.yaml/.pgm ..."
 call_service "${SAVE}" slam_toolbox/srv/SaveMap "{name: {data: '${BASE}'}}"
 
 if [ -n "${PULL}" ]; then
   missing=0
   for ext in "${EXTS[@]}"; do
-    ssh "${PULL}" "[ -s '${BASE}.${ext}' ]" || { echo "ERROR: no se generó ${PULL}:${BASE}.${ext}" >&2; missing=1; }
+    ssh "${PULL}" "[ -s '${BASE}.${ext}' ]" || { echo "ERROR: ${PULL}:${BASE}.${ext} is niet aangemaakt" >&2; missing=1; }
   done
-  [ "${missing}" -eq 0 ] || die "el mapa no se guardó completo en ${PULL}:${REMOTE_MAPS}"
-  echo "[+] Copiando de ${PULL} a ${MAPS_DIR} ..."
+  [ "${missing}" -eq 0 ] || die "de kaart is niet volledig opgeslagen in ${PULL}:${REMOTE_MAPS}"
+  echo "[+] Kopiëren van ${PULL} naar ${MAPS_DIR} ..."
   for ext in "${EXTS[@]}"; do
-    scp -q "${PULL}:${BASE}.${ext}" "${LOCAL_BASE}.${ext}" || die "falló scp de ${BASE}.${ext}"
+    scp -q "${PULL}:${BASE}.${ext}" "${LOCAL_BASE}.${ext}" || die "scp van ${BASE}.${ext} mislukt"
   done
 fi
 
 missing=0
 for ext in "${EXTS[@]}"; do
-  if [ ! -s "${LOCAL_BASE}.${ext}" ]; then echo "ERROR: no se generó ${LOCAL_BASE}.${ext}" >&2; missing=1; fi
+  if [ ! -s "${LOCAL_BASE}.${ext}" ]; then echo "ERROR: ${LOCAL_BASE}.${ext} is niet aangemaakt" >&2; missing=1; fi
 done
 if [ "${missing}" -ne 0 ]; then
-  [ -n "${PULL}" ] || echo "Los servicios respondieron pero no hay archivos aquí: slam_toolbox corre en otra máquina y los guardó allí." >&2
-  [ -n "${PULL}" ] || echo "Repite con --pull usuario@host, o copia los archivos a mano con scp." >&2
-  die "el mapa no se guardó completo en ${MAPS_DIR}"
+  [ -n "${PULL}" ] || echo "De services antwoordden maar er zijn hier geen bestanden: slam_toolbox draait op een andere machine en heeft ze daar opgeslagen." >&2
+  [ -n "${PULL}" ] || echo "Herhaal met --pull gebruiker@host, of kopieer de bestanden handmatig met scp." >&2
+  die "de kaart is niet volledig opgeslagen in ${MAPS_DIR}"
 fi
 
 echo
-echo "Mapa '${NAME}' guardado en ${MAPS_DIR}:"
+echo "Kaart '${NAME}' opgeslagen in ${MAPS_DIR}:"
 ls -l "${LOCAL_BASE}".{posegraph,data,yaml,pgm}
 echo
-echo "Navegar:  ros2 launch hrobot_bringup navigation.launch.py map_yaml:=${LOCAL_BASE}.yaml"
-echo "Ampliar:  ros2 launch hrobot_bringup mapping.launch.py map:=${NAME} maps_dir:=${MAPS_DIR}"
+echo "Navigeren:  ros2 launch hrobot_bringup navigation.launch.py map_yaml:=${LOCAL_BASE}.yaml"
+echo "Uitbreiden:  ros2 launch hrobot_bringup mapping.launch.py map:=${NAME} maps_dir:=${MAPS_DIR}"

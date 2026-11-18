@@ -1,43 +1,43 @@
 #!/usr/bin/env bash
-# Prepara la Raspberry Pi 5 para compilar y ejecutar este workspace.
+# Bereidt de Raspberry Pi 5 voor om deze workspace te bouwen en uit te voeren.
 #
-# Requisito previo: Ubuntu con ROS 2 Jazzy ya instalado en /opt/ros/jazzy (este script NO instala ROS)
-# y con git, colcon y rosdep ya instalados (este script tampoco los instala).
-# Es idempotente: se puede volver a ejecutar sin romper nada.
+# Vereist: Ubuntu met ROS 2 Jazzy al geïnstalleerd in /opt/ros/jazzy (dit script installeert ROS NIET)
+# en met git, colcon en rosdep al geïnstalleerd (dit script installeert die ook niet).
+# Idempotent: kan opnieuw worden uitgevoerd zonder iets te breken.
 #
-# Qué hace:
-#   1. Inicializa/actualiza rosdep.
-#   2. Driver del LD19 (rosdep no lo resuelve): si ya hay un `ldlidar_stl_ros2` disponible en el entorno
-#      (otro workspace ya compilado y cargado), lo reutiliza; si no, lo clona en src/ldlidar_stl_ros2.
-#   3. Permisos del puerto serie: grupo dialout + regla udev con symlink /dev/ldlidar.
-#   4. Red ROS 2: fija ROS_DOMAIN_ID y RMW_IMPLEMENTATION (deben coincidir con los del Create 3),
-#      los guarda en ~/.config/hrobot/ros_net.env y los carga desde ~/.bashrc (bloque marcado, una vez).
-#   5. Instala dependencias con rosdep y compila con colcon.
+# Wat het doet:
+#   1. Initialiseert/actualiseert rosdep.
+#   2. Driver van de RPLIDAR C1 (rosdep lost die niet op): is er al een `sllidar_ros2` beschikbaar in de omgeving
+#      (een andere, al gebouwde en geladen workspace), dan wordt die hergebruikt; zo niet, dan wordt hij gekloond in src/sllidar_ros2.
+#   3. Rechten op de seriële poort: groep dialout + udev-regel met symlink /dev/rplidar.
+#   4. ROS 2-netwerk: stelt ROS_DOMAIN_ID en RMW_IMPLEMENTATION in (moeten overeenkomen met die van de Create 3),
+#      slaat ze op in ~/.config/hrobot/ros_net.env en laadt ze vanuit ~/.bashrc (gemarkeerd blok, één keer).
+#   5. Installeert afhankelijkheden met rosdep en bouwt met colcon.
 #
-# Uso:  scripts/setup_pi.sh [--skip-udev] [--skip-build] [--force-driver] [--skip-net]
-#                           [--domain-id N] [--rmw rmw_fastrtps_cpp|rmw_cyclonedds_cpp]
-#   --skip-udev     no añade tu usuario a dialout ni instala la regla udev (no existirá /dev/ldlidar:
-#                   pasa el puerto real, p. ej. lidar_port:=/dev/ttyUSB0)
-#   --skip-build    no ejecuta colcon build
-#   --force-driver  clona y compila el driver aquí aunque ya exista uno en el entorno
-#   --skip-net      no toca ROS_DOMAIN_ID / RMW_IMPLEMENTATION
-#   --domain-id N   dominio ROS (def: $ROS_DOMAIN_ID si existe, si no 0)
-#   --rmw NAME      middleware (def: $RMW_IMPLEMENTATION si existe, si no rmw_fastrtps_cpp)
-# Variables opcionales:
-#   LDLIDAR_REPO   repositorio del driver   (def: repo oficial de LDRobot)
-#   LDLIDAR_REF    rama, tag o commit       (def: master; fíjalo a un commit cuando el build funcione)
-#   ROS_DISTRO_NAME  distribución de ROS    (def: jazzy)
-#   JOBS           workers de colcon        (def: 2, para no agotar la RAM de la Pi)
+# Gebruik:  scripts/setup_pi.sh [--skip-udev] [--skip-build] [--force-driver] [--skip-net]
+#                               [--domain-id N] [--rmw rmw_fastrtps_cpp|rmw_cyclonedds_cpp]
+#   --skip-udev     voegt je gebruiker niet toe aan dialout en installeert de udev-regel niet (/dev/rplidar
+#                   bestaat dan niet: geef de echte poort mee, bijv. lidar_port:=/dev/ttyUSB0)
+#   --skip-build    voert colcon build niet uit
+#   --force-driver  kloont en bouwt de driver hier ook als er al een in de omgeving bestaat
+#   --skip-net      raakt ROS_DOMAIN_ID / RMW_IMPLEMENTATION niet aan
+#   --domain-id N   ROS-domein (standaard: $ROS_DOMAIN_ID indien gezet, anders 0)
+#   --rmw NAME      middleware (standaard: $RMW_IMPLEMENTATION indien gezet, anders rmw_fastrtps_cpp)
+# Optionele variabelen:
+#   SLLIDAR_REPO   repository van de driver (standaard: officiële repo van Slamtec)
+#   SLLIDAR_REF    branch, tag of commit    (standaard: main; zet vast op een commit zodra de build werkt)
+#   ROS_DISTRO_NAME  ROS-distributie        (standaard: jazzy)
+#   JOBS           colcon-workers           (standaard: 2, om het RAM van de Pi niet uit te putten)
 
 set -euo pipefail
 
-LDLIDAR_REPO="${LDLIDAR_REPO:-https://github.com/ldrobotSensorTeam/ldlidar_stl_ros2.git}"
-LDLIDAR_REF="${LDLIDAR_REF:-master}"
+SLLIDAR_REPO="${SLLIDAR_REPO:-https://github.com/Slamtec/sllidar_ros2.git}"
+SLLIDAR_REF="${SLLIDAR_REF:-main}"
 ROS_DISTRO_NAME="${ROS_DISTRO_NAME:-jazzy}"
 JOBS="${JOBS:-2}"
-UDEV_RULE="/etc/udev/rules.d/99-ldlidar.rules"
-# CP2102 (USB-serie habitual del LD19). Verifícalo con `lsusb` y ajusta si tu adaptador es otro.
-UDEV_CONTENT='SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", SYMLINK+="ldlidar", GROUP="dialout", MODE="0660"'
+UDEV_RULE="/etc/udev/rules.d/99-rplidar.rules"
+# CP2102 (gebruikelijke USB-serieel-adapter van de RPLIDAR C1). Controleer met `lsusb` en pas aan als jouw adapter anders is.
+UDEV_CONTENT='SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", SYMLINK+="rplidar", GROUP="dialout", MODE="0660"'
 
 NET_DIR="${HOME}/.config/hrobot"
 NET_FILE="${NET_DIR}/ros_net.env"
@@ -58,44 +58,44 @@ while [ $# -gt 0 ]; do
     --skip-build) SKIP_BUILD=1 ;;
     --force-driver) FORCE_DRIVER=1 ;;
     --skip-net) SKIP_NET=1 ;;
-    --domain-id) [ $# -gt 0 ] || { echo "--domain-id requiere un valor" >&2; exit 2; }; DOMAIN_ID="$1"; shift ;;
-    --rmw) [ $# -gt 0 ] || { echo "--rmw requiere un valor" >&2; exit 2; }; RMW_NAME="$1"; shift ;;
-    -h|--help) sed -n '2,33p' "$0"; exit 0 ;;
-    *) echo "Argumento desconocido: $arg (usa --help)" >&2; exit 2 ;;
+    --domain-id) [ $# -gt 0 ] || { echo "--domain-id vereist een waarde" >&2; exit 2; }; DOMAIN_ID="$1"; shift ;;
+    --rmw) [ $# -gt 0 ] || { echo "--rmw vereist een waarde" >&2; exit 2; }; RMW_NAME="$1"; shift ;;
+    -h|--help) sed -n '2,30p' "$0"; exit 0 ;;
+    *) echo "Onbekend argument: $arg (gebruik --help)" >&2; exit 2 ;;
   esac
 done
 
 log() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
 die() { printf '\033[1;31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
 
-[[ "${DOMAIN_ID}" =~ ^[0-9]+$ ]] && [ "${DOMAIN_ID}" -le 232 ] || { echo "ROS_DOMAIN_ID invalido: ${DOMAIN_ID} (0-232)" >&2; exit 2; }
+[[ "${DOMAIN_ID}" =~ ^[0-9]+$ ]] && [ "${DOMAIN_ID}" -le 232 ] || { echo "Ongeldige ROS_DOMAIN_ID: ${DOMAIN_ID} (0-232)" >&2; exit 2; }
 case "${RMW_NAME}" in
   rmw_fastrtps_cpp|rmw_cyclonedds_cpp) ;;
-  *) echo "RMW no soportado: ${RMW_NAME} (usa rmw_fastrtps_cpp o rmw_cyclonedds_cpp)" >&2; exit 2 ;;
+  *) echo "RMW niet ondersteund: ${RMW_NAME} (gebruik rmw_fastrtps_cpp of rmw_cyclonedds_cpp)" >&2; exit 2 ;;
 esac
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
-[ "$(id -u)" -ne 0 ] || die "No lo ejecutes como root; usa tu usuario (el script llama a sudo cuando hace falta)."
-[ -f "/opt/ros/${ROS_DISTRO_NAME}/setup.bash" ] || die "No se encuentra /opt/ros/${ROS_DISTRO_NAME}/setup.bash. Instala ROS 2 ${ROS_DISTRO_NAME} primero."
-[ -d src ] || die "No se encuentra el directorio src/ en ${REPO_ROOT}."
+[ "$(id -u)" -ne 0 ] || die "Voer dit niet als root uit; gebruik je eigen gebruiker (het script roept sudo aan waar nodig)."
+[ -f "/opt/ros/${ROS_DISTRO_NAME}/setup.bash" ] || die "/opt/ros/${ROS_DISTRO_NAME}/setup.bash niet gevonden. Installeer eerst ROS 2 ${ROS_DISTRO_NAME}."
+[ -d src ] || die "De map src/ is niet gevonden in ${REPO_ROOT}."
 
-log "Inicializando rosdep"
+log "rosdep initialiseren"
 if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then
   sudo rosdep init
 fi
 rosdep update --rosdistro "${ROS_DISTRO_NAME}"
 
-# setup.bash de ROS usa variables sin definir: desactivar -u mientras se carga.
+# setup.bash van ROS gebruikt ongedefinieerde variabelen: schakel -u uit tijdens het laden.
 set +u
 # shellcheck disable=SC1090
 source "/opt/ros/${ROS_DISTRO_NAME}/setup.bash"
 set -u
 
 if [ "${SKIP_NET}" -eq 0 ]; then
-  log "Red ROS 2 (ROS_DOMAIN_ID=${DOMAIN_ID}, RMW_IMPLEMENTATION=${RMW_NAME})"
-  # Instala el middleware elegido (rmw_fastrtps_cpp ya viene con ros-base; cyclonedds no siempre).
+  log "ROS 2-netwerk (ROS_DOMAIN_ID=${DOMAIN_ID}, RMW_IMPLEMENTATION=${RMW_NAME})"
+  # Installeert de gekozen middleware (rmw_fastrtps_cpp zit al in ros-base; cyclonedds niet altijd).
   sudo apt-get install -y "ros-${ROS_DISTRO_NAME}-${RMW_NAME//_/-}"
   mkdir -p "${NET_DIR}"
   printf 'export ROS_DOMAIN_ID=%s\nexport RMW_IMPLEMENTATION=%s\n' "${DOMAIN_ID}" "${RMW_NAME}" > "${NET_FILE}"
@@ -108,91 +108,88 @@ if [ "${SKIP_NET}" -eq 0 ]; then
       echo "${NET_END}"
     } >> "${BASHRC}"
   fi
-  # Aplicar también a este proceso (build/rosdep) y avisar para el robot.
+  # Ook op dit proces toepassen (build/rosdep) en waarschuwen voor de robot.
   export ROS_DOMAIN_ID="${DOMAIN_ID}" RMW_IMPLEMENTATION="${RMW_NAME}"
-  echo "Guardado en ${NET_FILE}. Abre una terminal nueva (o 'source ~/.bashrc')."
-  echo "IMPORTANTE: el Create 3 debe usar el mismo RMW (interfaz web > Application > ROS 2) y su ROS_DOMAIN_ID"
-  echo "debe ser ${DOMAIN_ID}. Reinicia la aplicación del Create 3 tras cambiarlos."
+  echo "Opgeslagen in ${NET_FILE}. Open een nieuwe terminal (of 'source ~/.bashrc')."
+  echo "BELANGRIJK: de Create 3 moet dezelfde RMW gebruiken (webinterface > Application > ROS 2) en zijn ROS_DOMAIN_ID"
+  echo "moet ${DOMAIN_ID} zijn. Herstart de applicatie van de Create 3 na het wijzigen."
 else
-  log "Omitiendo configuración de red ROS (--skip-net)"
+  log "ROS-netwerkconfiguratie overgeslagen (--skip-net)"
 fi
 
-LD_DIR="src/ldlidar_stl_ros2"
+LD_DIR="src/sllidar_ros2"
 USE_EXISTING_DRIVER=0
 if [ "${FORCE_DRIVER}" -eq 0 ]; then
-  if existing_prefix="$(ros2 pkg prefix ldlidar_stl_ros2 2>/dev/null)"; then
+  if existing_prefix="$(ros2 pkg prefix sllidar_ros2 2>/dev/null)"; then
     case "${existing_prefix}" in
-      "${REPO_ROOT}"/install/*) ;;  # es el de este workspace: tratarlo como propio
+      "${REPO_ROOT}"/install/*) ;;  # is die van deze workspace: behandel als eigen
       *) USE_EXISTING_DRIVER=1 ;;
     esac
   fi
 fi
 
 if [ "${USE_EXISTING_DRIVER}" -eq 1 ]; then
-  log "Driver del LD19 ya disponible en ${existing_prefix}: se reutiliza (usa --force-driver para compilarlo aquí)"
+  log "Driver van de RPLIDAR C1 al beschikbaar in ${existing_prefix}: wordt hergebruikt (gebruik --force-driver om hem hier te bouwen)"
 else
-  log "Driver del LD19 (${LDLIDAR_REPO} @ ${LDLIDAR_REF})"
+  log "Driver van de RPLIDAR C1 (${SLLIDAR_REPO} @ ${SLLIDAR_REF})"
   if [ -d "${LD_DIR}/.git" ]; then
     git -C "${LD_DIR}" fetch --tags origin
   else
-    git clone "${LDLIDAR_REPO}" "${LD_DIR}"
+    git clone "${SLLIDAR_REPO}" "${LD_DIR}"
   fi
-  git -C "${LD_DIR}" checkout "${LDLIDAR_REF}"
-  # Si LDLIDAR_REF es una rama, avanzar a su última versión (sin merges); si es tag/commit no hace nada.
+  git -C "${LD_DIR}" checkout "${SLLIDAR_REF}"
+  # Is SLLIDAR_REF een branch, ga dan naar de laatste versie (zonder merges); bij een tag/commit gebeurt er niets.
   if git -C "${LD_DIR}" symbolic-ref -q HEAD >/dev/null; then
-    git -C "${LD_DIR}" merge --ff-only "origin/${LDLIDAR_REF}"
+    git -C "${LD_DIR}" merge --ff-only "origin/${SLLIDAR_REF}"
   fi
-  echo "Driver en commit: $(git -C "${LD_DIR}" rev-parse --short HEAD)"
+  echo "Driver op commit: $(git -C "${LD_DIR}" rev-parse --short HEAD)"
 fi
 
 if [ "${SKIP_UDEV}" -eq 0 ]; then
-  log "Permisos del puerto serie (dialout + udev /dev/ldlidar)"
+  log "Rechten op de seriële poort (dialout + udev /dev/rplidar)"
   if ! id -nG "${USER}" | tr ' ' '\n' | grep -qx dialout; then
     sudo usermod -aG dialout "${USER}"
-    echo "Añadido ${USER} al grupo dialout: cierra sesión y vuelve a entrar para que surta efecto."
+    echo "${USER} toegevoegd aan de groep dialout: log uit en weer in om het van kracht te laten worden."
   fi
   if [ ! -f "${UDEV_RULE}" ] || [ "$(cat "${UDEV_RULE}")" != "${UDEV_CONTENT}" ]; then
     printf '%s\n' "${UDEV_CONTENT}" | sudo tee "${UDEV_RULE}" >/dev/null
     sudo udevadm control --reload-rules
     sudo udevadm trigger
-    echo "Regla udev instalada en ${UDEV_RULE}. Reconecta el LiDAR; debería aparecer /dev/ldlidar."
+    echo "Udev-regel geïnstalleerd in ${UDEV_RULE}. Sluit de LiDAR opnieuw aan; /dev/rplidar zou moeten verschijnen."
   fi
 else
-  log "Omitiendo permisos udev (--skip-udev)"
+  log "Udev-rechten overgeslagen (--skip-udev)"
 fi
 
-log "Instalando dependencias con rosdep"
-# hrobot_simulation (Gazebo) es solo para el PC de desarrollo: no se instala ni compila en la Pi.
+log "Afhankelijkheden installeren met rosdep"
+# hrobot_simulation (Gazebo) is alleen voor de ontwikkel-pc: wordt niet op de Pi geïnstalleerd of gebouwd.
 rosdep install --from-paths src --ignore-src -y --rosdistro "${ROS_DISTRO_NAME}" \
   --skip-keys "ros_gz_sim ros_gz_bridge"
 
 if [ "${SKIP_BUILD}" -eq 0 ]; then
-  log "Compilando con colcon (workers: ${JOBS})"
-  # Se compila hrobot_bringup y sus dependencias del workspace (hrobot_description y el driver ldlidar_stl_ros2).
-  # hrobot_simulation (Gazebo) queda fuera: es solo del PC de desarrollo.
+  log "Bouwen met colcon (workers: ${JOBS})"
+  # Er wordt hrobot_bringup gebouwd met zijn workspace-afhankelijkheden (hrobot_description en de driver sllidar_ros2).
+  # hrobot_simulation (Gazebo) valt erbuiten: die is alleen voor de ontwikkel-pc.
   build_args=(--symlink-install --parallel-workers "${JOBS}" --packages-up-to hrobot_bringup)
   if [ "${USE_EXISTING_DRIVER}" -eq 1 ]; then
-    # Evita recompilar/sobrescribir el driver del otro workspace si también hay copia en src/.
-    if [ -d "${LD_DIR}" ]; then build_args+=(--packages-skip ldlidar_stl_ros2); fi
-  else
-    # El driver no incluye <pthread.h> y falla con el GCC de Ubuntu 24.04 (pthread_mutex_* sin declarar).
-    build_args+=(--cmake-args "-DCMAKE_CXX_FLAGS=-include pthread.h")
+    # Voorkomt dat de driver van de andere workspace opnieuw wordt gebouwd/overschreven als er ook een kopie in src/ staat.
+    if [ -d "${LD_DIR}" ]; then build_args+=(--packages-skip sllidar_ros2); fi
   fi
   colcon build "${build_args[@]}"
 else
-  log "Omitiendo compilación (--skip-build)"
+  log "Bouwen overgeslagen (--skip-build)"
 fi
 
-log "Listo"
+log "Klaar"
 cat <<EOF
-Siguientes pasos:
+Volgende stappen:
   source ${REPO_ROOT}/install/setup.bash
-  ls -l /dev/ldlidar            # o /dev/ttyUSB0 si no usas la regla udev
-  echo \$ROS_DOMAIN_ID \$RMW_IMPLEMENTATION   # ${ROS_DOMAIN_ID-?} ${RMW_IMPLEMENTATION-?}; deben coincidir con el Create 3
-  ros2 topic list | grep -E '/r2/(odom|cmd_vel)'   # comprueba los topics del Create 3
-  ros2 launch hrobot_bringup mapping.launch.py lidar_port:=/dev/ldlidar
-  # otro robot sin tocar el entorno: ... mapping.launch.py robot_namespace:=r3
-Namespace en esta terminal: ${CREATE3_ROBOT_NAMESPACE-r2} (variable CREATE3_ROBOT_NAMESPACE o 'r2'). Todo el stack cuelga de él: /r2/scan, /r2/map,
-.../r2/cmd_vel... El namespace del Create 3 se cambia en su interfaz web.
-Comprueba que ves los topics del Create 3 (ros2 topic list) y el QoS de /r2/scan (ros2 topic info /r2/scan -v).
+  ls -l /dev/rplidar            # of /dev/ttyUSB0 als je de udev-regel niet gebruikt
+  echo \$ROS_DOMAIN_ID \$RMW_IMPLEMENTATION   # ${ROS_DOMAIN_ID-?} ${RMW_IMPLEMENTATION-?}; moeten overeenkomen met de Create 3
+  ros2 topic list | grep -E '/r2/(odom|cmd_vel)'   # controleer de topics van de Create 3
+  ros2 launch hrobot_bringup mapping.launch.py lidar_port:=/dev/rplidar
+  # andere robot zonder de omgeving aan te passen: ... mapping.launch.py robot_namespace:=r3
+Namespace in deze terminal: ${CREATE3_ROBOT_NAMESPACE-r2} (variabele CREATE3_ROBOT_NAMESPACE of 'r2'). De hele stack hangt eronder: /r2/scan, /r2/map,
+.../r2/cmd_vel... De namespace van de Create 3 wijzig je in zijn webinterface.
+Controleer dat je de topics van de Create 3 ziet (ros2 topic list) en de QoS van /r2/scan (ros2 topic info /r2/scan -v).
 EOF

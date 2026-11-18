@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Remuestrea sensor_msgs/LaserScan a un numero FIJO de rayos.
+"""Resamplet sensor_msgs/LaserScan naar een VAST aantal stralen.
 
-El LD19 entrega entre ~500 y 504 lecturas por vuelta. slam_toolbox (Karto) fija el tamano con el primer
-scan y avisa "LaserRangeScan contains N range readings, expected 504" con cualquier otro. Este nodo lee
-`scan_raw` (driver) y publica `scan` con siempre `num_beams` rayos y los mismos angulos. Usa el vecino mas
-cercano (no interpola, para no inventar distancias en los bordes de los obstaculos). Solo robot real.
+De RPLIDAR C1 levert per omwenteling een wisselend aantal metingen (~500 ruwe punten; met hoekcompensatie
+van de driver een vast aantal). slam_toolbox (Karto) legt de grootte vast met de eerste scan en meldt
+"LaserRangeScan contains N range readings, expected M" bij elke andere. Deze node leest `scan_raw` (driver)
+en publiceert `scan` met altijd `num_beams` stralen en dezelfde hoeken. Gebruikt de dichtstbijzijnde
+buur (geen interpolatie, om geen afstanden aan de randen van obstakels te verzinnen). Alleen echte robot.
 """
 
 import math
@@ -18,12 +19,12 @@ TWO_PI = 2.0 * math.pi
 
 
 def resample_arrays(ranges, intensities, angle_min, angle_increment, num_beams):
-    """Devuelve (ranges, intensities) con `num_beams` rayos repartidos en 0..2*pi (360 grados).
+    """Geeft (ranges, intensities) terug met `num_beams` stralen verdeeld over 0..2*pi (360 graden).
 
-    Rayo de salida k = angulo k*2*pi/num_beams. Se toma la lectura de entrada mas cercana; si el scan de
-    entrada no cubre una vuelta completa, los rayos fuera de su rango quedan en inf (sin lectura).
-    `intensities` puede ser None o de otro largo que `ranges`: entonces la salida no lleva intensidades.
-    Python puro: ~500 rayos a 10 Hz no justifican depender de numpy.
+    Uitvoerstraal k = hoek k*2*pi/num_beams. De dichtstbijzijnde invoermeting wordt genomen; als de
+    invoerscan geen volledige omwenteling dekt, blijven stralen buiten het bereik op inf (geen meting).
+    `intensities` kan None zijn of een andere lengte hebben dan `ranges`: dan bevat de uitvoer geen intensiteiten.
+    Pure Python: ~500 stralen bij 10 Hz rechtvaardigen geen afhankelijkheid van numpy.
     """
     n_in = len(ranges)
     out_inc = TWO_PI / num_beams
@@ -54,16 +55,16 @@ class ScanResampler(Node):
         super().__init__("scan_resampler")
         self.declare_parameter("input_topic", "scan_raw")
         self.declare_parameter("output_topic", "scan")
-        self.declare_parameter("num_beams", 504)
+        self.declare_parameter("num_beams", 360)
         self._n = int(self.get_parameter("num_beams").value)
         if self._n < 2:
-            raise ValueError("num_beams debe ser >= 2")
-        # RELIABLE empareja con suscriptores RELIABLE (Nav2) y BEST_EFFORT (slam_toolbox, RViz).
+            raise ValueError("num_beams moet >= 2 zijn")
+        # RELIABLE koppelt met RELIABLE-abonnees (Nav2) en BEST_EFFORT-abonnees (slam_toolbox, RViz).
         out_qos = QoSProfile(depth=5, reliability=ReliabilityPolicy.RELIABLE)
         self._pub = self.create_publisher(
             LaserScan, self.get_parameter("output_topic").value, out_qos
         )
-        # Sensor-data (BEST_EFFORT) empareja con un driver RELIABLE o BEST_EFFORT.
+        # Sensor-data (BEST_EFFORT) koppelt met een RELIABLE- of BEST_EFFORT-driver.
         self.create_subscription(
             LaserScan,
             self.get_parameter("input_topic").value,

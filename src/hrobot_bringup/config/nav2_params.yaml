@@ -1,15 +1,15 @@
-# Nav2 (Jazzy) + AMCL para navegación autónoma del Create 3 + LD19 sobre un MAPA GUARDADO.
-# Localización: map_server (mapa .yaml/.pgm) + AMCL (publica map -> odom). NO corre slam_toolbox a la vez.
-# Odometría y TF odom -> base_link: del Create 3 (robot real) o de Gazebo (simulación).
-# Nav2 lee la odometría de `odom_topic` (odom_reliable en el robot real, ver scripts/odom_relay.py).
-# launch/nav.launch.py reescribe este archivo con RewrittenYaml(root_key=<ns>) si hay namespace.
+# Nav2 (Jazzy) + AMCL voor autonome navigatie van de Create 3 + RPLIDAR C1 op een OPGESLAGEN KAART.
+# Lokalisatie: map_server (kaart .yaml/.pgm) + AMCL (publiceert map -> odom). slam_toolbox draait NIET tegelijk.
+# Odometrie en TF odom -> base_link: van de Create 3 (echte robot) of van Gazebo (simulatie).
+# Nav2 leest de odometrie van `odom_topic` (odom_reliable op de echte robot, zie scripts/odom_relay.py).
+# launch/nav.launch.py herschrijft dit bestand met RewrittenYaml(root_key=<ns>) als er een namespace is.
 #
-# NOMBRES (a qué namespace resuelve cada nombre relativo):
-#  * Los costmaps son nodos ANIDADOS (/<ns>/local_costmap/local_costmap): un nombre relativo leído dentro
-#    de ellos (scan.topic, static_layer.map_topic) resolvería a /<ns>/local_costmap/scan (incorrecto).
-#    Por eso son ABSOLUTOS con el marcador "/<robot_namespace>/..." que nav.launch.py sustituye por "/r2/..."
-#    o, sin namespace, por "/...".
-#  * Relativos (correctos): odom_topic, topics de behavior_server, amcl.scan_topic, map_server, lifecycle managers.
+# NAMEN (naar welke namespace elke relatieve naam wordt omgezet):
+#  * De costmaps zijn GENESTE nodes (/<ns>/local_costmap/local_costmap): een relatieve naam die daarbinnen
+#    wordt gelezen (scan.topic, static_layer.map_topic) zou omgezet worden naar /<ns>/local_costmap/scan (onjuist).
+#    Daarom zijn ze ABSOLUUT met de markering "/<robot_namespace>/..." die nav.launch.py vervangt door "/r2/..."
+#    of, zonder namespace, door "/...".
+#  * Relatief (correct): odom_topic, topics van behavior_server, amcl.scan_topic, map_server, lifecycle managers.
 
 amcl:
   ros__parameters:
@@ -21,7 +21,7 @@ amcl:
     laser_model_type: likelihood_field
     tf_broadcast: true
     transform_tolerance: 1.0
-    # Se pisan desde nav.launch.py (initial_x/initial_y/initial_yaw/set_initial_pose).
+    # Worden overschreven door nav.launch.py (initial_x/initial_y/initial_yaw/set_initial_pose).
     set_initial_pose: false
     always_reset_initial_pose: false
     first_map_only: false
@@ -32,15 +32,15 @@ amcl:
     resample_interval: 1
     recovery_alpha_fast: 0.0
     recovery_alpha_slow: 0.0
-    update_min_d: 0.1        # m de movimiento entre actualizaciones (robot lento y pequeño)
+    update_min_d: 0.1        # m beweging tussen updates (kleine, langzame robot)
     update_min_a: 0.2        # rad
-    # Ruido de odometría: ruedas del Create 3 (patinaje moderado al girar)
+    # Odometrieruis: wielen van de Create 3 (matige slip bij het draaien)
     alpha1: 0.2
     alpha2: 0.2
     alpha3: 0.2
     alpha4: 0.2
     alpha5: 0.2
-    # LD19: 360 grados, 0.02-12 m
+    # RPLIDAR C1: 360 graden, 0,05-12 m
     laser_min_range: 0.1
     laser_max_range: 12.0
     max_beams: 60
@@ -55,7 +55,7 @@ amcl:
 
 map_server:
   ros__parameters:
-    # yaml_filename lo inyecta nav.launch.py (argumento map_yaml).
+    # yaml_filename wordt door nav.launch.py ingevoegd (argument map_yaml).
     topic_name: map
 
 bt_navigator:
@@ -66,7 +66,7 @@ bt_navigator:
     bt_loop_duration: 10
     default_server_timeout: 20
     wait_for_service_timeout: 1000
-    # BT por defecto (navigate_to_pose_w_replanning_and_recovery.xml) y lista de plugins por defecto.
+    # Standaard BT (navigate_to_pose_w_replanning_and_recovery.xml) en standaardlijst met plugins.
 
 controller_server:
   ros__parameters:
@@ -92,7 +92,7 @@ controller_server:
       xy_goal_tolerance: 0.15
       yaw_goal_tolerance: 0.25
 
-    # Regulated Pure Pursuit: sencillo de ajustar en base diferencial y frena cerca de obstáculos/curvas.
+    # Regulated Pure Pursuit: eenvoudig af te stellen op een differentiële basis en remt vlak bij obstakels/bochten.
     FollowPath:
       plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
       desired_linear_vel: 0.25
@@ -168,7 +168,7 @@ global_costmap:
       plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
-        map_topic: "/<robot_namespace>/map"   # absoluto: nodo anidado (ver NOMBRES)
+        map_topic: "/<robot_namespace>/map"   # absoluut: geneste node (zie NAMEN)
         map_subscribe_transient_local: true
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
@@ -199,7 +199,7 @@ planner_server:
       plugin: "nav2_navfn_planner::NavfnPlanner"
       tolerance: 0.3
       use_astar: true
-      allow_unknown: false    # mapa estático ya explorado: no planificar por zonas desconocidas
+      allow_unknown: false    # statische, reeds verkende kaart: niet plannen door onbekende gebieden
 
 smoother_server:
   ros__parameters:

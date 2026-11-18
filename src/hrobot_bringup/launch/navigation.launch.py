@@ -1,10 +1,10 @@
-"""Robot real: hardware_base (robot_state_publisher + LiDAR LD19) + map_server + AMCL + Nav2 + RViz.
+"""Echte robot: hardware_base (robot_state_publisher + RPLIDAR C1) + map_server + AMCL + Nav2 + RViz.
 
-El mapa se crea antes con `mapping` (teleop) y se guarda con save_map. Aquí se navega sobre él con AMCL.
-Igual que en la simulación, AMCL arranca ya posicionado en initial_x/y/yaw (por defecto 0,0,0 = el origen
-del mapa, o sea el dock desde el que se mapeó): pon el robot en el dock antes de lanzar. Si está en otro sitio,
-pasa initial_x/y/yaw, o set_initial_pose:=false y usa "2D Pose Estimate" en RViz.
-Cada include aplica el namespace por su cuenta: este launch NO lo envuelve.
+De kaart wordt eerst gemaakt met `mapping` (teleop) en opgeslagen met save_map. Hier wordt er met AMCL op
+genavigeerd. Net als in de simulatie start AMCL al gepositioneerd op initial_x/y/yaw (standaard 0,0,0 = de
+oorsprong van de kaart, dus het dock waarvandaan gekaart is): zet de robot in het dock voor het starten. Staat
+hij elders, geef dan initial_x/y/yaw mee, of set_initial_pose:=false en gebruik "2D Pose Estimate" in RViz.
+Elke include past de namespace zelf toe: deze launch wikkelt hem NIET.
 """
 
 import os
@@ -32,7 +32,8 @@ def generate_launch_description():
             "use_sim_time": use_sim_time,
             "lidar_port": LaunchConfiguration("lidar_port"),
             "lidar_baudrate": LaunchConfiguration("lidar_baudrate"),
-            "laser_scan_dir": LaunchConfiguration("laser_scan_dir"),
+            "laser_inverted": LaunchConfiguration("laser_inverted"),
+            "lidar_scan_mode": LaunchConfiguration("lidar_scan_mode"),
         }.items(),
     )
     nav = IncludeLaunchDescription(
@@ -42,7 +43,7 @@ def generate_launch_description():
             "use_sim_time": use_sim_time,
             "map_yaml": LaunchConfiguration("map_yaml"),
             "rviz": LaunchConfiguration("rviz"),
-            "odom_relay": "true",  # el Create 3 publica odom BEST_EFFORT
+            "odom_relay": "true",  # de Create 3 publiceert odom als BEST_EFFORT
             "set_initial_pose": LaunchConfiguration("set_initial_pose"),
             "initial_x": LaunchConfiguration("initial_x"),
             "initial_y": LaunchConfiguration("initial_y"),
@@ -54,21 +55,22 @@ def generate_launch_description():
         [
             robot_namespace_argument(),
             DeclareLaunchArgument("use_sim_time", default_value="false"),
-            DeclareLaunchArgument("map_yaml", description="Ruta absoluta al .yaml del mapa."),
+            DeclareLaunchArgument("map_yaml", description="Absoluut pad naar het .yaml-bestand van de kaart."),
             DeclareLaunchArgument("rviz", default_value="true", description="true|false"),
             DeclareLaunchArgument("lidar_port", default_value="/dev/ttyUSB0"),
-            DeclareLaunchArgument("lidar_baudrate", default_value="230400"),
-            DeclareLaunchArgument("laser_scan_dir", default_value="true", description="true|false"),
+            DeclareLaunchArgument("lidar_baudrate", default_value="460800"),
+            DeclareLaunchArgument("laser_inverted", default_value="false", description="true|false"),
+            DeclareLaunchArgument("lidar_scan_mode", default_value="Standard"),
             DeclareLaunchArgument(
                 "set_initial_pose",
                 default_value="true",
-                description="true (por defecto, como en la simulación) = AMCL arranca en initial_x/y/yaw, "
-                "que por defecto es el origen del mapa (el dock). false = fijar la pose con 2D Pose Estimate.",
+                description="true (standaard, zoals in de simulatie) = AMCL start op initial_x/y/yaw, "
+                "standaard de oorsprong van de kaart (het dock). false = stel de pose in met 2D Pose Estimate.",
             ),
             DeclareLaunchArgument("initial_x", default_value="0.0"),
             DeclareLaunchArgument("initial_y", default_value="0.0"),
             DeclareLaunchArgument("initial_yaw", default_value="0.0"),
-            nav,  # primero: valida map_yaml antes de arrancar procesos
+            nav,  # eerst: valideert map_yaml voordat processen starten
             hardware,
         ]
     )

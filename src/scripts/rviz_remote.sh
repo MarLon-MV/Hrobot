@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Abre RViz en esta máquina (laptop) para ver el robot real que corre en la Pi.
+# Opent RViz op deze machine (laptop) om de echte robot te bekijken die op de Pi draait.
 #
-# En la Pi lanza antes:  ros2 launch hrobot_bringup mapping.launch.py lidar_port:=/dev/ldlidar rviz:=false
+# Start eerst op de Pi:  ros2 launch hrobot_bringup mapping.launch.py lidar_port:=/dev/rplidar rviz:=false
 #
 # Uso:  src/scripts/rviz_remote.sh [mapping|navigation] [--namespace NS] [--domain ID] [--rmw NAME]
-#   mapping|navigation  config de RViz a usar (def: mapping)
-#   --namespace         namespace del robot (def: $CREATE3_ROBOT_NAMESPACE si existe, si no r2; vacío = ninguno)
-#   --domain            ROS_DOMAIN_ID (def: el que ya tengas exportado; debe coincidir con el de la Pi)
-#   --rmw               RMW_IMPLEMENTATION (def: el que ya tengas exportado; debe coincidir con el de la Pi)
+#   mapping|navigation  te gebruiken RViz-configuratie (standaard: mapping)
+#   --namespace         namespace van de robot (standaard: $CREATE3_ROBOT_NAMESPACE indien gezet, anders r2; leeg = geen)
+#   --domain            ROS_DOMAIN_ID (standaard: de al geëxporteerde waarde; moet overeenkomen met die van de Pi)
+#   --rmw               RMW_IMPLEMENTATION (standaard: de al geëxporteerde waarde; moet overeenkomen met die van de Pi)
 
 set -euo pipefail
 
@@ -22,27 +22,27 @@ while [ $# -gt 0 ]; do
   arg="$1"; shift
   case "$arg" in
     mapping|navigation) CONFIG="${arg}" ;;
-    --namespace) [ $# -gt 0 ] || die "--namespace necesita un valor (usa '' para ninguno)"; NAMESPACE="$1"; shift ;;
-    --domain) [ $# -gt 0 ] || die "--domain necesita un valor"; export ROS_DOMAIN_ID="$1"; shift ;;
-    --rmw) [ $# -gt 0 ] || die "--rmw necesita un valor"; export RMW_IMPLEMENTATION="$1"; shift ;;
+    --namespace) [ $# -gt 0 ] || die "--namespace heeft een waarde nodig (gebruik '' voor geen)"; NAMESPACE="$1"; shift ;;
+    --domain) [ $# -gt 0 ] || die "--domain heeft een waarde nodig"; export ROS_DOMAIN_ID="$1"; shift ;;
+    --rmw) [ $# -gt 0 ] || die "--rmw heeft een waarde nodig"; export RMW_IMPLEMENTATION="$1"; shift ;;
     -h|--help) sed -n '2,10p' "${BASH_SOURCE[0]}"; exit 0 ;;
-    *) die "argumento desconocido: ${arg}" ;;
+    *) die "onbekend argument: ${arg}" ;;
   esac
 done
 
-# set -u rompe con los setup.bash de ROS; se desactiva solo mientras se cargan.
+# set -u gaat stuk op de setup.bash van ROS; wordt alleen tijdens het laden uitgeschakeld.
 set +u
-[ -f /opt/ros/jazzy/setup.bash ] || die "no encuentro /opt/ros/jazzy/setup.bash"
+[ -f /opt/ros/jazzy/setup.bash ] || die "kan /opt/ros/jazzy/setup.bash niet vinden"
 source /opt/ros/jazzy/setup.bash
 [ -f "${WS_ROOT}/install/setup.bash" ] && source "${WS_ROOT}/install/setup.bash"
 set -u
 
-command -v rviz2 >/dev/null || die "rviz2 no está instalado (sudo apt install ros-jazzy-rviz2)"
+command -v rviz2 >/dev/null || die "rviz2 is niet geïnstalleerd (sudo apt install ros-jazzy-rviz2)"
 
 SRC_RVIZ="${WS_ROOT}/src/hrobot_description/rviz/${CONFIG}.rviz"
-[ -f "${SRC_RVIZ}" ] || die "no existe ${SRC_RVIZ}"
+[ -f "${SRC_RVIZ}" ] || die "${SRC_RVIZ} bestaat niet"
 
-# El .rviz usa el marcador /<robot_namespace>; el launch lo sustituye, aquí lo hacemos con sed.
+# De .rviz gebruikt de markering /<robot_namespace>; de launch vervangt die, hier doen we het met sed.
 TMP_RVIZ="$(mktemp --suffix=.rviz)"
 trap 'rm -f "${TMP_RVIZ}"' EXIT
 if [ -n "${NAMESPACE}" ]; then
@@ -53,5 +53,5 @@ else
   REMAPS=()
 fi
 
-echo "RViz: config=${CONFIG} namespace='${NAMESPACE}' ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0} RMW=${RMW_IMPLEMENTATION:-default}"
+echo "RViz: configuratie=${CONFIG} namespace='${NAMESPACE}' ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0} RMW=${RMW_IMPLEMENTATION:-default}"
 rviz2 -d "${TMP_RVIZ}" --ros-args "${REMAPS[@]}"

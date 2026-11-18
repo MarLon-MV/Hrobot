@@ -1,44 +1,45 @@
 <?xml version="1.0"?>
-<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="hrobot_ld19">
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="hrobot_rplidar_c1">
 
-  <!-- sim:=true adds wheels, casters and the Gazebo (gz-sim, Harmonic) plugins: diff drive,
-       joint states and the LD19 as a gpu_lidar. With sim:=false (real robot) the model is just
-       base_link + laser_frame: odom/TF come from the Create 3 itself. -->
+  <!-- sim:=true voegt wielen, zwenkwielen en de Gazebo-plugins (gz-sim, Harmonic) toe: diff drive,
+       joint states en de RPLIDAR C1 als gpu_lidar. Met sim:=false (echte robot) bestaat het model
+       alleen uit base_link + laser_frame: odom/TF komen van de Create 3 zelf. -->
   <xacro:arg name="sim" default="false"/>
 
-  <!-- Create 3 base geometry -->
+  <!-- Geometrie van de Create 3-basis -->
   <xacro:property name="base_radius" value="0.171"/>
   <xacro:property name="base_height" value="0.072"/>
   <xacro:property name="base_mass" value="2.7"/>
 
-  <!-- LD19 LiDAR mounting offsets relative to base_link (adjustable) -->
+  <!-- Montage-offsets van de RPLIDAR C1 ten opzichte van base_link (aanpasbaar) -->
   <xacro:property name="laser_x" value="0.0"/>
   <xacro:property name="laser_y" value="0.0"/>
   <xacro:property name="laser_z" value="0.12"/>
-  <!-- Yaw of laser_frame relative to base_link (rad). Real LD19: measured in RViz, its 0 deg ray points to
-       the robot's right, hence -pi/2. The simulated lidar already looks forward: sim.launch.py passes 0. -->
-  <xacro:arg name="laser_yaw" default="-1.5707963"/>
+  <!-- Yaw van laser_frame ten opzichte van base_link (rad). Echte RPLIDAR C1: standaard 0; meet in RViz
+       waar de 0-gradenstraal heen wijst en pas dit aan als die niet naar voren wijst. De gesimuleerde
+       lidar kijkt al naar voren: sim.launch.py geeft 0 mee. -->
+  <xacro:arg name="laser_yaw" default="0.0"/>
 
-  <!-- Create 3 drive geometry (used only in simulation) -->
+  <!-- Aandrijfgeometrie van de Create 3 (alleen in simulatie gebruikt) -->
   <xacro:property name="wheel_radius" value="0.03575"/>
   <xacro:property name="wheel_width" value="0.015"/>
   <xacro:property name="wheel_separation" value="0.233"/>
   <xacro:property name="wheel_mass" value="0.2"/>
   <xacro:property name="caster_radius" value="0.01"/>
   <xacro:property name="caster_x" value="0.125"/>
-  <!-- Centre of mass shifted forward (iRobot ignition model: 2.28 cm) so the robot stays level
-       with a single front caster. -->
+  <!-- Zwaartepunt naar voren verschoven (iRobot ignition-model: 2,28 cm) zodat de robot waterpas
+       blijft met één zwenkwiel vooraan. -->
   <xacro:property name="cog_x" value="0.0228"/>
 
-  <!-- Visual meshes from iRobotEducation/create3_sim (jazzy, BSD-3, see meshes/LICENSE.irobot).
-       Their z offset (0.0392) is relative to a base_link 4.45 mm below the floor; here base_link
-       sits on the floor (wheel axis at z = wheel_radius), hence 0.0392 - 0.00445. -->
+  <!-- Visuele meshes van iRobotEducation/create3_sim (jazzy, BSD-3, zie meshes/LICENSE.irobot).
+       Hun z-offset (0,0392) is relatief aan een base_link die 4,45 mm onder de vloer ligt; hier ligt
+       base_link op de vloer (wielas op z = wheel_radius), vandaar 0,0392 - 0,00445. -->
   <xacro:property name="mesh_z" value="0.03475"/>
 
-  <!-- LD19 body approximation -->
-  <xacro:property name="laser_radius" value="0.0235"/>
-  <xacro:property name="laser_height" value="0.034"/>
-  <xacro:property name="laser_mass" value="0.047"/>
+  <!-- Benadering van de behuizing van de RPLIDAR C1 (ca. 55,6 x 55,6 x 41,3 mm, ~110 g) -->
+  <xacro:property name="laser_radius" value="0.0278"/>
+  <xacro:property name="laser_height" value="0.0413"/>
+  <xacro:property name="laser_mass" value="0.110"/>
 
   <link name="base_link">
     <visual>
@@ -53,7 +54,7 @@
         <mesh filename="package://hrobot_description/meshes/bumper_visual.dae"/>
       </geometry>
     </visual>
-    <!-- Bottom lifted to 0.025 m so the body never drags on the floor in simulation. -->
+    <!-- Onderkant 0,025 m omhoog zodat de romp in de simulatie nooit over de vloer sleept. -->
     <collision>
       <origin xyz="0 0 ${(base_height + 0.025) / 2}" rpy="0 0 0"/>
       <geometry>
@@ -76,7 +77,7 @@
       <geometry>
         <cylinder radius="${laser_radius}" length="${laser_height}"/>
       </geometry>
-      <material name="ld19_black">
+      <material name="rplidar_c1_black">
         <color rgba="0.1 0.1 0.1 1.0"/>
       </material>
     </visual>
@@ -135,7 +136,7 @@
     <xacro:wheel name="left" y="${wheel_separation / 2}"/>
     <xacro:wheel name="right" y="${-wheel_separation / 2}"/>
 
-    <!-- Frictionless ball caster at the front only, like the real Create 3 (mu = 0 below). -->
+    <!-- Wrijvingsloos kogelwiel alleen vooraan, zoals de echte Create 3 (mu = 0 hieronder). -->
     <xacro:macro name="caster" params="name x">
       <link name="${name}_caster">
         <collision>
@@ -183,9 +184,9 @@
       </plugin>
     </gazebo>
 
-    <!-- LD19: 360 deg, ~450 samples at 10 Hz, 0.02-12 m (datasheet). -->
+    <!-- RPLIDAR C1: 360 gr, 360 samples (na hoekcompensatie van de driver) bij 10 Hz, 0,05-12 m (datasheet). -->
     <gazebo reference="laser_frame">
-      <sensor name="ld19" type="gpu_lidar">
+      <sensor name="rplidar_c1" type="gpu_lidar">
         <gz_frame_id>laser_frame</gz_frame_id>
         <topic>scan</topic>
         <update_rate>10</update_rate>
@@ -194,14 +195,14 @@
         <lidar>
           <scan>
             <horizontal>
-              <samples>450</samples>
+              <samples>360</samples>
               <resolution>1</resolution>
               <min_angle>-3.14159</min_angle>
               <max_angle>3.14159</max_angle>
             </horizontal>
           </scan>
           <range>
-            <min>0.02</min>
+            <min>0.05</min>
             <max>12.0</max>
             <resolution>0.015</resolution>
           </range>

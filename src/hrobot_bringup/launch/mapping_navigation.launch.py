@@ -1,12 +1,12 @@
-"""Robot real: mapear y navegar a la vez. hardware_base + slam_toolbox + Nav2 (sin AMCL ni map_server) + RViz.
+"""Echte robot: tegelijk kaarten en navigeren. hardware_base + slam_toolbox + Nav2 (zonder AMCL of map_server) + RViz.
 
-slam_toolbox (modo mapping) publica `map -> odom` y el `/map` vivo; Nav2 planifica sobre ese mapa mientras
-crece (nav.launch.py con localization:=slam, planner con allow_unknown). El robot se mueve por teleop o con
-metas "2D Goal Pose" de RViz; no hay exploración autónoma. Guarda el mapa con src/scripts/save_map.sh.
+slam_toolbox (mapping-modus) publiceert `map -> odom` en de levende `/map`; Nav2 plant op die kaart terwijl
+hij groeit (nav.launch.py met localization:=slam, planner met allow_unknown). De robot wordt met teleop of met
+"2D Goal Pose"-doelen in RViz bestuurd; er is geen autonome exploratie. Sla de kaart op met src/scripts/save_map.sh.
 
-No lo combines con `mapping` ni con `navigation`: los tres publican `map -> odom`.
-Cada include aplica el namespace por su cuenta: este launch NO lo envuelve. RViz es el de navegación
-(navigation.rviz, un solo RViz), así que slam se lanza con rviz:=false.
+Combineer dit niet met `mapping` of `navigation`: alle drie publiceren `map -> odom`.
+Elke include past de namespace zelf toe: deze launch wikkelt hem NIET. RViz is die van navigatie
+(navigation.rviz, één enkele RViz), dus slam wordt gestart met rviz:=false.
 """
 
 import os
@@ -34,7 +34,8 @@ def generate_launch_description():
             "use_sim_time": use_sim_time,
             "lidar_port": LaunchConfiguration("lidar_port"),
             "lidar_baudrate": LaunchConfiguration("lidar_baudrate"),
-            "laser_scan_dir": LaunchConfiguration("laser_scan_dir"),
+            "laser_inverted": LaunchConfiguration("laser_inverted"),
+            "lidar_scan_mode": LaunchConfiguration("lidar_scan_mode"),
         }.items(),
     )
     slam = IncludeLaunchDescription(
@@ -42,7 +43,7 @@ def generate_launch_description():
         launch_arguments={
             "robot_namespace": namespace,
             "use_sim_time": use_sim_time,
-            "rviz": "false",  # el RViz es el de nav.launch.py
+            "rviz": "false",  # de RViz is die van nav.launch.py
             "maps_dir": LaunchConfiguration("maps_dir"),
             "map": LaunchConfiguration("map"),
             "slam_lifecycle": LaunchConfiguration("slam_lifecycle"),
@@ -55,7 +56,7 @@ def generate_launch_description():
             "use_sim_time": use_sim_time,
             "localization": "slam",
             "rviz": LaunchConfiguration("rviz"),
-            "odom_relay": "true",  # el Create 3 publica odom BEST_EFFORT
+            "odom_relay": "true",  # de Create 3 publiceert odom als BEST_EFFORT
         }.items(),
     )
 
@@ -67,14 +68,15 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "lidar_port",
                 default_value="/dev/ttyUSB0",
-                description="Serial port of the LD19; e.g. /dev/ldlidar.",
+                description="Seriële poort van de RPLIDAR C1; bijv. /dev/rplidar.",
             ),
-            DeclareLaunchArgument("lidar_baudrate", default_value="230400"),
-            DeclareLaunchArgument("laser_scan_dir", default_value="true", description="true|false"),
+            DeclareLaunchArgument("lidar_baudrate", default_value="460800"),
+            DeclareLaunchArgument("laser_inverted", default_value="false", description="true|false"),
+            DeclareLaunchArgument("lidar_scan_mode", default_value="Standard"),
             DeclareLaunchArgument("maps_dir", default_value="~/.create3_maps"),
-            DeclareLaunchArgument("map", default_value="", description="Map to extend; empty = new."),
+            DeclareLaunchArgument("map", default_value="", description="Uit te breiden kaart; leeg = nieuwe kaart."),
             DeclareLaunchArgument("slam_lifecycle", default_value="true"),
-            # slam first: it validates map:= before any process starts.
+            # slam eerst: het valideert map:= voordat een proces start.
             slam,
             hardware,
             nav,
