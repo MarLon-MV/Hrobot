@@ -8,6 +8,7 @@ el mapa guardado con AMCL + Nav2.
 |---|---|
 | `mapping.launch.py` | Robot real: `hardware_base` + `slam`. |
 | `navigation.launch.py` | Robot real: `hardware_base` + `nav` + relé de odom. |
+| `mapping_navigation.launch.py` | Robot real: mapear y navegar a la vez: `hardware_base` + `slam` + `nav` (`localization:=slam`). |
 | `hardware_base.launch.py` | `robot_state_publisher` (xacro, `sim:=false`) + driver LD19 (publica `scan_raw`) + `scan_resampler` (publica `scan`). El Create 3 no se lanza aquí. |
 | `slam.launch.py` | `slam_toolbox` + RViz (`mapping.rviz`). Lo reutiliza `hrobot_simulation`. |
 | `nav.launch.py` | `map_server` + `amcl` + Nav2 + RViz (`navigation.rviz`), sin hardware. Lo reutiliza la simulación. |
@@ -138,6 +139,24 @@ ros2 launch hrobot_bringup navigation.launch.py map_yaml:=$PWD/src/maps/sala1.ya
 - `odom_relay.py`: el Create 3 publica `/r2/odom` BEST_EFFORT y Nav2 suscribe RELIABLE (no empareja); el relé publica
   `odom_reliable`, que leen `controller_server` y `bt_navigator`. Comprueba con
   `ros2 topic info /r2/odom_reliable -v`.
+
+## 8. Mapear y navegar a la vez (opcional)
+
+```bash
+ros2 launch hrobot_bringup mapping_navigation.launch.py lidar_port:=/dev/ldlidar
+# otra terminal: teleop, o "2D Goal Pose" en RViz
+src/scripts/save_map.sh nombre_del_mapa        # el mapa se guarda igual que en el paso 5
+```
+
+slam_toolbox (modo mapping) publica `map -> odom` y el `/map` vivo; Nav2 planifica sobre él (`nav.launch.py` con
+`localization:=slam`: sin `map_server` ni AMCL y con `allow_unknown: true` en el planner). No hay pose inicial que
+fijar: el mapa nace en la pose de arranque. Usa un solo RViz (`navigation.rviz`); `map:=<nombre>` amplía un mapa
+guardado como en el paso 6. **No lo combines con `mapping` ni con `navigation`** (los tres publican `map -> odom`).
+
+Ten en cuenta: el mapa cambia bajo el robot si slam_toolbox corrige la pose; es más probable que fallen planes por
+pasos estrechos o zonas sin explorar; y slam_toolbox + Nav2 juntos cargan la Pi 5 (vigila `top`; si satura, sube
+`throttle_scan` o `map_update_interval` en `config/slam_params.yaml`). En simulación:
+`ros2 launch hrobot_simulation sim.launch.py nav:=true localization:=slam`.
 
 ## Referencia
 

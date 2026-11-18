@@ -1,12 +1,14 @@
 """Gazebo (Harmonic) + robot Create 3/LD19 simulado + slam_toolbox + RViz.
 
 Arguments: world (room.sdf), headless (false), rviz (true), maps_dir, map, slam_lifecycle,
-x/y/yaw (pose de spawn), nav (false), map_yaml.
+x/y/yaw (pose de spawn), nav (false), localization (amcl), map_yaml.
 
 nav:=false (por defecto): slam_toolbox para mapear con teleop.
 nav:=true: navegacion autonoma sobre un mapa guardado (map_server + AMCL + Nav2) en vez de slam_toolbox;
 requiere map_yaml:=<ruta absoluta al .yaml>. AMCL arranca en la pose de spawn (x/y/yaw), que coincide con
 el origen del mapa si este se creo lanzando la simulacion sin mover x/y/yaw.
+nav:=true localization:=slam: mapear y navegar a la vez (slam_toolbox + Nav2 sobre el /map vivo, sin AMCL ni
+map_yaml; un solo RViz, el de navegacion).
 
 La simulacion corre SIN namespace (/cmd_vel, /scan, /odom, /map, /tf): igual que el robot real con
 `robot_namespace:=''`. Para mover el robot: teleop (ver README del paquete):
@@ -26,6 +28,7 @@ from launch.substitutions import (
     FindExecutable,
     LaunchConfiguration,
     PathJoinSubstitution,
+    PythonExpression,
 )
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
@@ -96,6 +99,7 @@ def generate_launch_description():
         launch_arguments={
             "robot_namespace": "",
             "use_sim_time": "true",
+            "localization": LaunchConfiguration("localization"),
             "map_yaml": LaunchConfiguration("map_yaml"),
             "rviz": LaunchConfiguration("rviz"),
             "odom_relay": "false",  # el puente de Gazebo ya publica odom RELIABLE
@@ -109,11 +113,19 @@ def generate_launch_description():
 
     slam = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(bringup_share, "launch", "slam.launch.py")),
-        condition=UnlessCondition(LaunchConfiguration("nav")),
+        # slam corre si no se navega (nav:=false) o si se navega sobre el mapa vivo (localization:=slam).
+        condition=IfCondition(
+            PythonExpression(
+                ["'", LaunchConfiguration("nav"), "' != 'true' or '", LaunchConfiguration("localization"), "' == 'slam'"]
+            )
+        ),
         launch_arguments={
             "robot_namespace": "",
             "use_sim_time": "true",
-            "rviz": LaunchConfiguration("rviz"),
+            # con nav:=true el RViz es el de nav.launch.py (uno solo)
+            "rviz": PythonExpression(
+                ["'false' if '", LaunchConfiguration("nav"), "' == 'true' else '", LaunchConfiguration("rviz"), "'"]
+            ),
             "maps_dir": LaunchConfiguration("maps_dir"),
             "map": LaunchConfiguration("map"),
             "slam_lifecycle": LaunchConfiguration("slam_lifecycle"),
@@ -138,7 +150,12 @@ def generate_launch_description():
                 "nav", default_value="false", description="true = AMCL + Nav2 en vez de slam_toolbox."
             ),
             DeclareLaunchArgument(
-                "map_yaml", default_value="", description="Con nav:=true: ruta absoluta al .yaml."
+                "localization",
+                default_value="amcl",
+                description="Con nav:=true: amcl (mapa guardado, map_yaml) o slam (mapear y navegar a la vez).",
+            ),
+            DeclareLaunchArgument(
+                "map_yaml", default_value="", description="Con nav:=true localization:=amcl: ruta absoluta al .yaml."
             ),
             DeclareLaunchArgument("x", default_value="0.0"),
             DeclareLaunchArgument("y", default_value="0.0"),

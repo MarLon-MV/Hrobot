@@ -1,12 +1,16 @@
-"""Navegación autónoma sobre un mapa guardado: map_server + AMCL + Nav2 + RViz. Sin hardware.
+"""Navegación autónoma con Nav2 + RViz. Sin hardware.
 
-Lo comparten `navigation` (robot real) y `sim` (con nav:=true).
-No corre slam_toolbox: AMCL publica map -> odom con el mapa de map_server.
+Lo comparten `navigation`, `mapping_navigation` (robot real) y `sim` (con nav:=true).
+
+`localization` elige quién publica `map -> odom` y `/map`:
+  * amcl (por defecto): map_server + AMCL sobre un mapa guardado (`map_yaml` obligatorio). No corre slam_toolbox.
+  * slam: no lanza map_server ni AMCL; Nav2 usa el `/map` vivo de un slam_toolbox que corre aparte (lo lanza
+    `mapping_navigation`). El planner pasa a `allow_unknown: true` porque el mapa aún tiene zonas sin explorar.
 
 Arguments: robot_namespace (env CREATE3_ROBOT_NAMESPACE or 'r2'; empty = none), use_sim_time (false),
-map_yaml (REQUIRED: ruta absoluta al .yaml del mapa), rviz (true), params_file, autostart (true),
-odom_relay (false; true en el robot real: Nav2 lee odom_reliable), set_initial_pose (false),
-initial_x/initial_y/initial_yaw (0.0).
+localization (amcl|slam), map_yaml (ruta absoluta al .yaml del mapa; solo con localization:=amcl), rviz (true),
+params_file, autostart (true), odom_relay (false; true en el robot real: Nav2 lee odom_reliable),
+set_initial_pose (false), initial_x/initial_y/initial_yaw (0.0) (estos tres solo con AMCL).
 
 Namespace: igual que slam.launch.py (PushRosNamespace, TF relativo, RewrittenYaml). Los nodos Nav2 se
 lanzan con el mismo patrón que el stack anterior probado en la Pi.
@@ -42,14 +46,21 @@ def _setup(context, *args, **kwargs):
     use_sim_time = LaunchConfiguration("use_sim_time")
     autostart = LaunchConfiguration("autostart")
 
-    map_yaml = os.path.abspath(
-        os.path.expanduser(LaunchConfiguration("map_yaml").perform(context).strip())
-    )
-    if not os.path.isfile(map_yaml):
-        raise RuntimeError(
-            f"map_yaml:='{map_yaml}' no existe. Pasa la ruta absoluta al .yaml del mapa "
-            "(p. ej. map_yaml:=$PWD/maps/mapa1.yaml; se genera con save_map, ver README)."
-        )
+    localization = LaunchConfiguration("localization").perform(context).strip().lower()
+    if localization not in ("amcl", "slam"):
+        raise RuntimeError(f"localization:='{localization}' no es válido: usa 'amcl' o 'slam'.")
+    use_amcl = localization == "amcl"
+
+    map_yaml = ""
+    if use_amcl:
+        map_yaml_arg = LaunchConfiguration("map_yaml").perform(context).strip()
+        map_yaml = os.path.abspath(os.path.expanduser(map_yaml_arg)) if map_yaml_arg else ""
+        if not os.path.isfile(map_yaml):
+            raise RuntimeError(
+                f"map_yaml:='{map_yaml_arg}' no existe o está vacío. Con localization:=amcl pasa la ruta "
+                "absoluta al .yaml del mapa (p. ej. map_yaml:=$PWD/src/maps/mapa1.yaml; se genera con "
+                "save_map, ver README)."
+            )
 
     # Orden: '/<robot_namespace>' -> '/<ns>' en los topics de los costmaps y luego RewrittenYaml.
     params_file = rewrite_yaml(
@@ -81,19 +92,25 @@ def _setup(context, *args, **kwargs):
         },
     }
 
-    actions = [
-        nav2_node("nav2_map_server", "map_server", extra={"yaml_filename": map_yaml}),
-        nav2_node("nav2_amcl", "amcl", extra=initial_pose),
-        Node(
-            package="nav2_lifecycle_manager",
-            executable="lifecycle_manager",
-            name="lifecycle_manager_localization",
-            output="screen",
-            parameters=common + [{"autostart": autostart}],
-        ),
+    actions = []
+    if use_amcl:
+        actions += [
+            nav2_node("nav2_map_server", "map_server", extra={"yaml_filename": map_yaml}),
+            nav2_node("nav2_amcl", "amcl", extra=initial_pose),
+            Node(
+                package="nav2_lifecycle_manager",
+                executable="lifecycle_manager",
+                name="lifecycle_manager_localization",
+                output="screen",
+                parameters=common + [{"autostart": autostart}],
+            ),
+        ]
+    # Con slam_toolbox el mapa crece mientras se navega: hay que poder planificar por zonas aún desconocidas.
+    planner_extra = None if use_amcl else {"GridBased": {"allow_unknown": True}}
+    actions += [
         nav2_node("nav2_controller", "controller_server", extra=odom_override),
         nav2_node("nav2_smoother", "smoother_server"),
-        nav2_node("nav2_planner", "planner_server"),
+        nav2_node("nav2_planner", "planner_server", extra=planner_extra),
         nav2_node("nav2_behaviors", "behavior_server"),
         nav2_node("nav2_bt_navigator", "bt_navigator", extra=odom_override),
         Node(
@@ -143,7 +160,15 @@ def generate_launch_description():
             robot_namespace_argument(),
             DeclareLaunchArgument("use_sim_time", default_value="false"),
             DeclareLaunchArgument(
-                "map_yaml", description="Ruta absoluta al .yaml del mapa (map_server)."
+                "localization",
+                default_value="amcl",
+                description="amcl = map_server + AMCL sobre un mapa guardado; slam = usar el /map de "
+                "un slam_toolbox que corre aparte (mapear y navegar a la vez).",
+            ),
+            DeclareLaunchArgument(
+                "map_yaml",
+                default_value="",
+                description="Ruta absoluta al .yaml del mapa (map_server). Obligatorio con localization:=amcl.",
             ),
             DeclareLaunchArgument("rviz", default_value="true", description="true|false"),
             DeclareLaunchArgument("params_file", default_value=default_params),
